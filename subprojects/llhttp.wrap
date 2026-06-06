@@ -1,0 +1,7 @@
+[wrap-git]
+url = https://github.com/nodejs/llhttp.git
+revision = release/v9.4.1
+depth = 1
+
+[provide]
+llhttp = llhttp_dep
