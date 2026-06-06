@@ -27,6 +27,8 @@ openssl = dependency('openssl',
 # sources
 src = files(
     'src/main.cpp',
+    'src/runtime/isolate.cpp',
+    'src/runtime/sandbox.cpp',
 )
 
 # main executable
@@ -36,4 +38,25 @@ executable(
     dependencies: [lua, libuv, openssl],
     include_directories: include_directories('src'),
     install: true,
+)
+
+run_target('lint',
+    command: [
+        'clang-tidy',
+        '-p', meson.build_root(),
+        'src/runtime/isolate.cpp',
+        'src/main.cpp',
+    ]
+)
+
+run_target('format',
+    command: [
+        'clang-format',
+        '-i',
+        'src/runtime/isolate.cpp',
+        'src/runtime/isolate.h',
+        'src/runtime/sandbox.cpp',
+        'src/runtime/sandbox.h',
+        'src/main.cpp',
+    ]
 )
