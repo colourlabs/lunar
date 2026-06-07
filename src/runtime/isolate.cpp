@@ -1,15 +1,27 @@
 #include "isolate.h"
+#include "lunar_limits.h"
 #include "sandbox.h"
 
-Isolate::Isolate(const std::string &worker_path, const std::string& std_path) : m_lua_state(luaL_newstate()) {
-    if (m_lua_state == nullptr) {
-        m_last_error = "failed to create Lua state";
-    };
+Isolate::Isolate(const std::string &worker_path, const std::string &std_path)
+    : m_alloc_state({.m_used = 0, .m_limit = 128ULL * 1024 * 1024, .m_peak = 0}),
+      m_lua_state(lua_newstate(lunar_alloc, &m_alloc_state, 0)) {
 
-    // install sandbox into the isolate
+    if (m_lua_state == nullptr) {
+        m_last_error = "failed to create Lua state (out of memory?)";
+        return;
+    }
+
+    // install per-isolate limits
+    lunar_install_limits(m_lua_state);
+    lunar_set_instruction_limit(m_lua_state, 50000000);
+    lunar_set_string_limits(m_lua_state, 1024 * 1024, 100000);
+    lunar_set_coroutine_limit(m_lua_state, 1000);
+    lunar_set_pattern_limit(m_lua_state, 100000);
+
     Sandbox::install(m_lua_state, std_path);
 
     if (!load_worker(worker_path)) {
+        lunar_destroy_limits(m_lua_state);
         lua_close(m_lua_state);
         m_lua_state = nullptr;
     }
@@ -17,15 +29,35 @@ Isolate::Isolate(const std::string &worker_path, const std::string& std_path) : 
 
 Isolate::~Isolate() {
     if (m_lua_state != nullptr) {
+        if (m_worker_env_ref != LUA_NOREF) {
+            luaL_unref(m_lua_state, LUA_REGISTRYINDEX, m_worker_env_ref);
+        }
+        lunar_destroy_limits(m_lua_state);
         lua_close(m_lua_state);
         m_lua_state = nullptr;
     }
 }
 
-Isolate::Isolate(Isolate &&other) noexcept
-    : m_lua_state(other.m_lua_state), m_last_error(std::move(other.m_last_error)) {
-    
-    other.m_lua_state = nullptr;
+Isolate &Isolate::operator=(Isolate &&other) noexcept {
+    if (this != &other) {
+        // clean up existing state
+        if (m_lua_state != nullptr) {
+            if (m_worker_env_ref != LUA_NOREF) {
+                luaL_unref(m_lua_state, LUA_REGISTRYINDEX, m_worker_env_ref);
+            }
+            lunar_destroy_limits(m_lua_state);
+            lua_close(m_lua_state);
+        }
+
+        m_alloc_state = other.m_alloc_state;
+        m_lua_state = other.m_lua_state;
+        m_last_error = std::move(other.m_last_error);
+        m_worker_env_ref = other.m_worker_env_ref;
+
+        other.m_lua_state = nullptr;
+        other.m_worker_env_ref = LUA_NOREF;
+    }
+    return *this;
 }
 
 bool Isolate::load_worker(const std::string &path) {
@@ -36,22 +68,23 @@ bool Isolate::load_worker(const std::string &path) {
     }
 
     // create the restricted environment table
-    lua_newtable(m_lua_state); 
+    lua_newtable(m_lua_state);
 
     // Inherit from master globals via __index metatable
-    lua_rawgeti(m_lua_state, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS); 
+    lua_rawgeti(m_lua_state, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
     lua_newtable(m_lua_state);
-    lua_pushvalue(m_lua_state, -2); 
-    lua_setfield(m_lua_state, -2, "__index"); 
-    lua_setmetatable(m_lua_state, -3); 
-    lua_pop(m_lua_state, 1); 
+    lua_pushvalue(m_lua_state, -2);
+    lua_setfield(m_lua_state, -2, "__index");
+    lua_setmetatable(m_lua_state, -3);
+    lua_pop(m_lua_state, 1);
 
     // save a reference to this environment for C++ use ---
     lua_pushvalue(m_lua_state, -1); // duplicate the env table on the stack
-    m_worker_env_ref = luaL_ref(m_lua_state, LUA_REGISTRYINDEX); // pops the duplicate, returns a ref ID
+    m_worker_env_ref =
+        luaL_ref(m_lua_state, LUA_REGISTRYINDEX); // pops the duplicate, returns a ref ID
 
     // bind the table as '_ENV' upvalue to the loaded worker chunk
-    lua_setupvalue(m_lua_state, -2, 1); 
+    lua_setupvalue(m_lua_state, -2, 1);
 
     if (lua_pcall(m_lua_state, 0, 0, 0) != LUA_OK) {
         m_last_error = lua_tostring(m_lua_state, -1);
@@ -137,12 +170,12 @@ LuaResponse Isolate::read_response() {
 std::optional<LuaResponse> Isolate::dispatch(const LuaRequest &req) {
     // fetch the worker's private environment table from the registry
     lua_rawgeti(m_lua_state, LUA_REGISTRYINDEX, m_worker_env_ref);
-    
+
     // look up the "handle" function inside that environment table
     lua_getfield(m_lua_state, -1, "handle");
-    
+
     // remove the environment table from the stack, leaving just the function
-    lua_remove(m_lua_state, -2); 
+    lua_remove(m_lua_state, -2);
 
     if (!lua_isfunction(m_lua_state, -1)) {
         m_last_error = "handle() function not found in worker environment";
@@ -161,7 +194,7 @@ std::optional<LuaResponse> Isolate::dispatch(const LuaRequest &req) {
     }
 
     LuaResponse res = read_response();
-    lua_pop(m_lua_state, 1); 
+    lua_pop(m_lua_state, 1);
 
     return res;
 }

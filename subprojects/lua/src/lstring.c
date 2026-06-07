@@ -21,6 +21,7 @@
 #include "lstate.h"
 #include "lstring.h"
 
+#include "lunar_limits.h"
 
 /*
 ** Maximum size for string table.
@@ -177,12 +178,19 @@ static TString *createstrobj (lua_State *L, size_t totalsize, lu_byte tag,
 
 
 TString *luaS_createlngstrobj (lua_State *L, size_t l) {
+  /* lunar: enforce length limit for long strings too */
+  LunarLimits *limits = lunar_get_limits(L);
+  if (limits != NULL && l > limits->m_max_string_len) {
+      luaG_runerror(L, "string too long (%zu bytes, max %zu)",
+                    l, limits->m_max_string_len);
+  }
+
   size_t totalsize = luaS_sizelngstr(l, LSTRREG);
   TString *ts = createstrobj(L, totalsize, LUA_VLNGSTR, G(L)->seed);
   ts->u.lnglen = l;
-  ts->shrlen = LSTRREG;  /* signals that it is a regular long string */
+  ts->shrlen = LSTRREG;
   ts->contents = cast_charp(ts) + offsetof(TString, falloc);
-  ts->contents[l] = '\0';  /* ending 0 */
+  ts->contents[l] = '\0';
   return ts;
 }
 
@@ -217,24 +225,29 @@ static TString *internshrstr (lua_State *L, const char *str, size_t l) {
   stringtable *tb = &g->strt;
   unsigned int h = luaS_hash(str, l, g->seed);
   TString **list = &tb->hash[lmod(h, tb->size)];
-  lua_assert(str != NULL);  /* otherwise 'memcmp'/'memcpy' are undefined */
+  lua_assert(str != NULL);
   for (ts = *list; ts != NULL; ts = ts->u.hnext) {
-    if (l == cast_uint(ts->shrlen) &&
-        (memcmp(str, getshrstr(ts), l * sizeof(char)) == 0)) {
-      /* found! */
-      if (isdead(g, ts))  /* dead (but not collected yet)? */
-        changewhite(ts);  /* resurrect it */
-      return ts;
-    }
+      if (l == cast_uint(ts->shrlen) &&
+          (memcmp(str, getshrstr(ts), l * sizeof(char)) == 0)) {
+          /* found existing string - no limit check needed */
+          if (isdead(g, ts))
+              changewhite(ts);
+          return ts;
+      }
   }
-  /* else must create a new string */
-  if (tb->nuse >= tb->size) {  /* need to grow string table? */
-    growstrtab(L, tb);
-    list = &tb->hash[lmod(h, tb->size)];  /* rehash with new size */
+  /* new string must be created - check count limit */
+  LunarLimits *limits = lunar_get_limits(L);
+  if (limits != NULL && tb->nuse >= limits->m_max_string_count) {
+      luaG_runerror(L, "too many unique strings (max %d)", limits->m_max_string_count);
+  }
+
+  if (tb->nuse >= tb->size) {
+      growstrtab(L, tb);
+      list = &tb->hash[lmod(h, tb->size)];
   }
   ts = createstrobj(L, sizestrshr(l), LUA_VSHRSTR, h);
   ts->shrlen = cast(ls_byte, l);
-  getshrstr(ts)[l] = '\0';  /* ending 0 */
+  getshrstr(ts)[l] = '\0';
   memcpy(getshrstr(ts), str, l * sizeof(char));
   ts->u.hnext = *list;
   *list = ts;
@@ -247,15 +260,22 @@ static TString *internshrstr (lua_State *L, const char *str, size_t l) {
 ** new string (with explicit length)
 */
 TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
-  if (l <= LUAI_MAXSHORTLEN)  /* short string? */
-    return internshrstr(L, str, l);
+  /* lunar: enforce string length limit */
+  LunarLimits *limits = lunar_get_limits(L);
+  if (limits != NULL && l > limits->m_max_string_len) {
+      luaG_runerror(L, "string too long (%zu bytes, max %zu)",
+                    l, limits->m_max_string_len);
+  }
+
+  if (l <= LUAI_MAXSHORTLEN)
+      return internshrstr(L, str, l);
   else {
-    TString *ts;
-    if (l_unlikely(l * sizeof(char) >= (MAX_SIZE - sizeof(TString))))
-      luaM_toobig(L);
-    ts = luaS_createlngstrobj(L, l);
-    memcpy(getlngstr(ts), str, l * sizeof(char));
-    return ts;
+      TString *ts;
+      if (l_unlikely(l * sizeof(char) >= (MAX_SIZE - sizeof(TString))))
+          luaM_toobig(L);
+      ts = luaS_createlngstrobj(L, l);
+      memcpy(getlngstr(ts), str, l * sizeof(char));
+      return ts;
   }
 }
 

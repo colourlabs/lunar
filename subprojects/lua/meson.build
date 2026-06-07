@@ -1,6 +1,6 @@
 project('lua', 'c', version: '5.5.0')
 
-lua_inc = include_directories('src')
+lua_inc = include_directories('src', 'lunar')
 
 lua_src = files(
     'src/lapi.c',
@@ -35,6 +35,8 @@ lua_src = files(
     'src/ltablib.c',
     'src/lutf8lib.c',
     'src/loadlib.c',
+    'lunar/lunar_alloc.c',
+    'lunar/lunar_limits.c',
 )
 
 lua_lib = static_library('lua', lua_src,

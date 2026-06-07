@@ -43,9 +43,10 @@ executable(
 run_target('lint',
     command: [
         'clang-tidy',
-        '-p', meson.build_root(),
-        'src/runtime/isolate.cpp',
-        'src/main.cpp',
+        '-p', meson.project_build_root(),
+        '--checks=-modernize-*',  # disable modernize for C files
+        'subprojects/lua/lunar/lunar_alloc.c',
+        'subprojects/lua/lunar/lunar_limits.c',
     ]
 )
 

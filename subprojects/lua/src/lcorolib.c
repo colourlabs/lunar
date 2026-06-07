@@ -18,6 +18,8 @@
 #include "lualib.h"
 #include "llimits.h"
 
+#include "lunar_limits.h"
+
 
 static lua_State *getco (lua_State *L) {
   lua_State *co = lua_tothread(L, 1);
@@ -57,7 +59,17 @@ static int auxresume (lua_State *L, lua_State *co, int narg) {
 static int luaB_coresume (lua_State *L) {
   lua_State *co = getco(L);
   int r;
-  r = auxresume(L, co, lua_gettop(L) - 1);
+
+  r = lua_resume(co, L, (lua_gettop(L) - 1), &(int){0});
+
+  /* lunar: decrement count when coroutine is dead */
+  if (r == LUA_OK || r == LUA_ERRRUN || r == LUA_ERRMEM) {
+      if (lua_status(co) == LUA_OK && lua_gettop(co) == 0) {
+          /* coroutine finished */
+          lunar_coroutine_dec(L);
+      }
+  }
+
   if (l_unlikely(r < 0)) {
     lua_pushboolean(L, 0);
     lua_insert(L, -2);
@@ -96,12 +108,22 @@ static int luaB_auxwrap (lua_State *L) {
 static int luaB_cocreate (lua_State *L) {
   lua_State *NL;
   luaL_checktype(L, 1, LUA_TFUNCTION);
+
+  /* lunar: enforce coroutine limit */
+  LunarLimits *limits = lunar_get_limits(L);
+  if (limits != NULL) {
+      if (limits->m_coroutine_count >= limits->m_coroutine_limit) {
+          return luaL_error(L, "coroutine limit exceeded (max %d)",
+                            limits->m_coroutine_limit);
+      }
+      limits->m_coroutine_count++;
+  }
+
   NL = lua_newthread(L);
-  lua_pushvalue(L, 1);  /* move function to top */
-  lua_xmove(L, NL, 1);  /* move function from L to NL */
+  lua_pushvalue(L, 1);
+  lua_xmove(L, NL, 1);
   return 1;
 }
-
 
 static int luaB_cowrap (lua_State *L) {
   luaB_cocreate(L);

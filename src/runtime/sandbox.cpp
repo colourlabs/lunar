@@ -42,15 +42,14 @@ void Sandbox::remove_unsafe_globals(lua_State *m_lua_state) {
 }
 
 void Sandbox::install_require(lua_State *m_lua_state, const std::string &std_path) {
-    // store std_path so lua_require can access it
+    // store std_path in registry, not as a global
     lua_pushstring(m_lua_state, std_path.c_str());
-    lua_setglobal(m_lua_state, "_lunar_std_path");
+    lua_setfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_std_path");
 
-    // module cache table
+    // module cache in registry too
     lua_newtable(m_lua_state);
-    lua_setglobal(m_lua_state, "_lunar_modules");
+    lua_setfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_modules");
 
-    // install custom require
     lua_pushcfunction(m_lua_state, Sandbox::lua_require);
     lua_setglobal(m_lua_state, "require");
 }
@@ -59,7 +58,7 @@ int Sandbox::lua_require(lua_State *m_lua_state) {
     const char *name = luaL_checkstring(m_lua_state, 1);
 
     // check cache first
-    lua_getglobal(m_lua_state, "_lunar_modules");
+    lua_getfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_modules");
     lua_getfield(m_lua_state, -1, name);
 
     if (!lua_isnil(m_lua_state, -1)) {
@@ -78,7 +77,7 @@ int Sandbox::lua_require(lua_State *m_lua_state) {
     }
 
     // build file path: lunar/router -> {std_path}/router.lua
-    lua_getglobal(m_lua_state, "_lunar_std_path");
+    lua_getfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_std_path");
     std::string std_path = lua_tostring(m_lua_state, -1);
     lua_pop(m_lua_state, 1);
 
@@ -110,10 +109,10 @@ int Sandbox::lua_require(lua_State *m_lua_state) {
     }
 
     // cache it
-    lua_getglobal(m_lua_state, "_lunar_modules");
-    lua_pushvalue(m_lua_state, -2); // copy module table
+    lua_getfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_modules");
+    lua_pushvalue(m_lua_state, -2);
     lua_setfield(m_lua_state, -2, name);
-    lua_pop(m_lua_state, 1); // pop modules table
+    lua_pop(m_lua_state, 1);
 
     // return module table
     return 1;

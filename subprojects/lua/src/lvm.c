@@ -31,6 +31,18 @@
 #include "ltm.h"
 #include "lvm.h"
 
+#include "lunar_limits.h"
+
+/* check the vm */
+#define lunar_vmcheck(L) { \
+  LunarLimits *_limits = lunar_get_limits(L); \
+  if (_limits != NULL) { \
+    _limits->m_instruction_count++; \
+    if (l_unlikely(_limits->m_instruction_count >= _limits->m_instruction_limit)) { \
+      luaG_runerror(L, "CPU limit exceeded"); \
+    } \
+  } \
+}
 
 /*
 ** By default, use jump tables in the main interpreter loop on gcc
@@ -1184,10 +1196,11 @@ void luaV_finishOp (lua_State *L) {
 /* fetch an instruction and prepare its execution */
 #define vmfetch()	{ \
   if (l_unlikely(trap)) {  /* stack reallocation or hooks? */ \
-    trap = luaG_traceexec(L, pc);  /* handle hooks */ \
-    updatebase(ci);  /* correct stack */ \
+    trap = luaG_traceexec(L, pc); /* handle hooks */ \
+    updatebase(ci); /* correct stack */ \
   } \
   i = *(pc++); \
+  lunar_vmcheck(L); /* lunar: run vmcheck */  \
 }
 
 #define vmdispatch(o)	switch(o)

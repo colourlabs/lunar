@@ -364,6 +364,9 @@ typedef struct MatchState {
   lua_State *L;
   int matchdepth;  /* control for recursive depth (to avoid C stack overflow) */
   int level;  /* total number of captures (finished or unfinished) */
+  /* lunar: add step counter */
+  int steps;
+  int step_limit;
   struct {
     const char *init;
     ptrdiff_t len;  /* length or special value (CAP_*) */
@@ -570,6 +573,11 @@ static const char *match_capture (MatchState *ms, const char *s, int l) {
 
 
 static const char *match (MatchState *ms, const char *s, const char *p) {
+  ms->steps++;
+  if (ms->steps > ms->step_limit) {
+      luaL_error(ms->L, "pattern match too complex (possible ReDoS)");
+  }
+
   if (l_unlikely(ms->matchdepth-- == 0))
     luaL_error(ms->L, "pattern too complex");
   init: /* using goto to optimize tail recursion */
