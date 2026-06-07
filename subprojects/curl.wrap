@@ -1,0 +1,10 @@
+[wrap-file]
+directory = curl-8.20.0
+source_url = https://curl.se/download/curl-8.20.0.tar.xz
+source_filename = curl-8.20.0.tar.xz
+source_hash = 3c93259972369651ec941dfb37dc1d7c3bc6f01da0e3037f61e967117f3945df
+
+patch_directory = libcurl
+
+[provide]
+dependency_names = libcurl

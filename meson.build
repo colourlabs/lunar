@@ -28,6 +28,14 @@ llhttp = dependency('llhttp',
 spdlog = dependency('spdlog', 
     required: true
 )
+yyjson = dependency('yyjson',
+    fallback: ['yyjson', 'yyjson_dep'],
+    required: true,
+)
+libcurl = dependency('libcurl', 
+    fallback: ['curl', 'curl_dep'], 
+    required: true
+)
 
 # sources
 src = files(
@@ -39,13 +47,16 @@ src = files(
     'src/pool/isolate_pool.cpp',
     'src/utils/logger.cpp',
     'src/utils/http.cpp',
+    'src/utils/bootstrap.cpp',
+    'src/stdlib/json/json.cpp',
+    'src/stdlib/fetch/fetch.cpp'
 )
 
 # main executable
 executable(
     'lunar',
     src,
-    dependencies: [lua_lunar, libuv, openssl, llhttp, spdlog],
+    dependencies: [lua_lunar, libuv, openssl, llhttp, spdlog, yyjson, libcurl],
     include_directories: include_directories('src'),
     install: true,
 )
@@ -66,7 +77,9 @@ all_src = [
     'src/utils/logger.hpp',
     'src/utils/http.cpp',
     'src/utils/http.hpp',
-    'src/utils/logger.cpp'
+    'src/utils/logger.cpp',
+    'src/stdlib/json.cpp',
+    'src/stdlib/json.hpp'
 ]
 
 run_target('lint',

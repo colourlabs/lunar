@@ -1,14 +1,25 @@
 #include "isolate.hpp"
 #include "lunar_limits.h"
 #include "sandbox.hpp"
+#include "utils/logger.hpp"
 
 Isolate::Isolate(const std::string &worker_path, const std::string &std_path)
-    : m_alloc_state({.m_used = 0, .m_limit = 128ULL * 1024 * 1024, .m_peak = 0, .m_baseline = 0}),
+    : m_limits(),
+      m_alloc_state({
+          .m_used = 0,
+          .m_limit = 128ULL * 1024 * 1024,
+          .m_peak = 0,
+          .m_baseline = 0,
+          .m_limits = &m_limits
+      }),
       m_lua_state(lua_newstate(lunar_alloc, &m_alloc_state, 0)) {
     if (m_lua_state == nullptr) {
         m_last_error = "failed to create Lua state (out of memory?)";
         return;
     }
+
+    m_limits.m_instruction_limit = 50000000;
+    m_limits.m_max_string_len = 1024 * 1024;
 
     if (!lunar_install_limits(m_lua_state)) {
         m_last_error = "failed to allocate limits struct";
@@ -50,8 +61,11 @@ Isolate::~Isolate() {
 }
 
 Isolate::Isolate(Isolate &&other) noexcept
-    : m_alloc_state(other.m_alloc_state), m_lua_state(other.m_lua_state),
+    : m_limits(other.m_limits), m_alloc_state(other.m_alloc_state), m_lua_state(other.m_lua_state),
       m_last_error(std::move(other.m_last_error)), m_worker_env_ref(other.m_worker_env_ref) {
+    
+    m_alloc_state.m_limits = &m_limits;
+    
     if (m_lua_state != nullptr) {
         lua_setallocf(m_lua_state, lunar_alloc, &m_alloc_state);
     }
@@ -68,6 +82,8 @@ Isolate &Isolate::operator=(Isolate &&other) noexcept {
             lunar_destroy_limits(m_lua_state);
             lua_close(m_lua_state);
         }
+
+        m_alloc_state.m_limits = &m_limits;
 
         m_alloc_state = other.m_alloc_state;
         m_lua_state = other.m_lua_state;
@@ -191,7 +207,7 @@ LuaResponse Isolate::read_response() {
     return res;
 }
 
-std::optional<LuaResponse> Isolate::dispatch(const LuaRequest &req) {
+std::optional<LuaResponse> Isolate::dispatch_impl(const LuaRequest &req) {
     static constexpr size_t max_body = 1024 * 1024; // 1MB
     static constexpr size_t max_header = 8 * 1024;  // 8KB per value
     static constexpr size_t max_headers = 64;
@@ -200,10 +216,12 @@ std::optional<LuaResponse> Isolate::dispatch(const LuaRequest &req) {
         m_last_error = "request body too large";
         return std::nullopt;
     }
+
     if (req.m_headers.size() > max_headers) {
         m_last_error = "too many request headers";
         return std::nullopt;
     }
+
     for (const auto &[k, v] : req.m_headers) {
         if (k.size() > max_header || v.size() > max_header) {
             m_last_error = "request header too large";
@@ -211,16 +229,8 @@ std::optional<LuaResponse> Isolate::dispatch(const LuaRequest &req) {
         }
     }
 
-    // rest of dispatch unchanged
     lua_rawgeti(m_lua_state, LUA_REGISTRYINDEX, m_worker_env_ref);
-
-    // fetch the worker's private environment table from the registry
-    lua_rawgeti(m_lua_state, LUA_REGISTRYINDEX, m_worker_env_ref);
-
-    // look up the "handle" function inside that environment table
     lua_getfield(m_lua_state, -1, "handle");
-
-    // remove the environment table from the stack, leaving just the function
     lua_remove(m_lua_state, -2);
 
     if (!lua_isfunction(m_lua_state, -1)) {
@@ -229,30 +239,23 @@ std::optional<LuaResponse> Isolate::dispatch(const LuaRequest &req) {
         return std::nullopt;
     }
 
-    // push req table as argument
     push_request(req);
 
-    // call handle(req)
     if (lua_pcall(m_lua_state, 1, 1, 0) != LUA_OK) {
         m_last_error = lua_tostring(m_lua_state, -1);
         lua_pop(m_lua_state, 1);
-
-        printf("[lua] used=%zu peak=%zu limit=%zu\n", m_alloc_state.m_used, m_alloc_state.m_peak,
-               m_alloc_state.m_limit);
-
+        Logger::debug("[lua] used={} peak={} limit={}", m_alloc_state.m_used, m_alloc_state.m_peak, m_alloc_state.m_limit);
         return std::nullopt;
     }
 
     LuaResponse res = read_response();
     lua_pop(m_lua_state, 1);
 
-    printf("[lua] used=%zu peak=%zu limit=%zu\n", m_alloc_state.m_used, m_alloc_state.m_peak,
-           m_alloc_state.m_limit);
+    Logger::debug("[lua] used={} peak={} limit={}", m_alloc_state.m_used, m_alloc_state.m_peak, m_alloc_state.m_limit);
 
     lua_gc(m_lua_state, LUA_GCCOLLECT, 0);
 
-    printf("[after gc] used=%zu peak=%zu limit=%zu\n", m_alloc_state.m_used, m_alloc_state.m_peak,
-           m_alloc_state.m_limit);
+    Logger::debug("[lua after gc] used={} peak={} limit={}", m_alloc_state.m_used, m_alloc_state.m_peak, m_alloc_state.m_limit);
 
     return res;
 }

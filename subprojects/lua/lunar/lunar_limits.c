@@ -15,23 +15,30 @@ static const size_t default_max_string_len = 1024 * 1024;
 bool lunar_install_limits(lua_State *m_lua_state) {
     LunarLimits *limits = (LunarLimits *)malloc(sizeof(LunarLimits));
     if (limits == NULL) {
-        return false;  // caller sets m_last_error and closes state cleanly
+        return false;
     }
 
-    limits->m_instruction_count   = 0;
-    limits->m_instruction_limit   = DEFAULT_INSTRUCTION_LIMIT;
-    limits->m_max_string_len      = default_max_string_len;
-    limits->m_max_string_count    = DEFAULT_MAX_STRING_COUNT;
-    limits->m_coroutine_count     = 0;
-    limits->m_coroutine_limit     = DEFAULT_COROUTINE_LIMIT;
-    limits->m_pattern_steps       = 0;
-    limits->m_pattern_step_limit  = DEFAULT_PATTERN_STEP_LIMIT;
+    limits->m_magic = 0x4C554E41;
+
+    limits->m_instruction_count = 0;
+    limits->m_instruction_limit = DEFAULT_INSTRUCTION_LIMIT;
+    limits->m_max_string_len = default_max_string_len;
+    limits->m_max_string_count = DEFAULT_MAX_STRING_COUNT;
+    limits->m_coroutine_count = 0;
+    limits->m_coroutine_limit = DEFAULT_COROUTINE_LIMIT;
+    limits->m_pattern_steps = 0;
+    limits->m_in_limit_check = 0;
+    limits->m_pattern_step_limit = DEFAULT_PATTERN_STEP_LIMIT;
 
     *(LunarLimits **)lua_getextraspace(m_lua_state) = limits;
+
     return true;
 }
 
 LunarLimits *lunar_get_limits(lua_State *m_lua_state) {
+    if (m_lua_state == NULL) {
+        return NULL;
+    }
     return *(LunarLimits **)lua_getextraspace(m_lua_state);
 }
 

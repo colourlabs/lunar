@@ -259,14 +259,12 @@ static TString *internshrstr (lua_State *L, const char *str, size_t l) {
 /*
 ** new string (with explicit length)
 */
-TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
-  /* lunar: enforce string length limit */
+TString *luaS_newlstr(lua_State *L, const char *str, size_t l) {
   LunarLimits *limits = lunar_get_limits(L);
-  if (limits != NULL && l > limits->m_max_string_len) {
-      luaG_runerror(L, "string too long (%zu bytes, max %zu)",
-                    l, limits->m_max_string_len);
+  if (limits != NULL && !limits->m_in_limit_check && l > limits->m_max_string_len) {
+      limits->m_in_limit_check = 1;
+      luaG_runerror(L, "string too long (%zu bytes, max %zu)", l, limits->m_max_string_len);
   }
-
   if (l <= LUAI_MAXSHORTLEN)
       return internshrstr(L, str, l);
   else {

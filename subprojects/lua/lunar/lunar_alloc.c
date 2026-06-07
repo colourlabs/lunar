@@ -5,7 +5,15 @@
 // stored in the lua_State's ud pointer via lua_newstate
 // retrieved via lua_getallocf
 void *lunar_alloc(void *user_data, void *pointer, size_t osize, size_t nsize) {
+    if (user_data == NULL) {
+        return realloc(pointer, nsize);
+    }
+
     LunarAllocState *state = (LunarAllocState *)user_data;
+
+    if (state == NULL) {
+        return realloc(pointer, nsize);
+    }
 
     if (nsize == 0) {
         if (pointer != NULL) {
@@ -32,7 +40,18 @@ void *lunar_alloc(void *user_data, void *pointer, size_t osize, size_t nsize) {
         }
         new_used += delta;
     } else {
-        new_used -= (osize - nsize);
+        size_t delta = osize - nsize;
+        if (delta > state->m_used) {
+            state->m_used = 0;
+        } else {
+            state->m_used -= delta;
+        }
+        
+        if (state->m_used < state->m_baseline) {
+            new_used = state->m_baseline;
+        } else {
+            new_used = state->m_used;
+        }
     }
 
     void *result = realloc(pointer, nsize);

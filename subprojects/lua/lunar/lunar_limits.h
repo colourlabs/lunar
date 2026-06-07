@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "lua.h"
 
@@ -27,6 +28,10 @@ typedef struct { // NOLINT(modernize-use-using)
     // pattern match complexity (ReDoS protection)
     int m_pattern_steps;
     int m_pattern_step_limit;
+
+    int m_in_limit_check;
+
+    uint32_t m_magic; // set to 0x4C554E41 ('LUNA')
 } LunarLimits;
 
 // retrieve the limits struct from a lua_State

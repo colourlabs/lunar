@@ -18,4 +18,5 @@ class Sandbox {
     static void lock_string_lib(lua_State *m_lua_state);
     static void lock_math_lib(lua_State *m_lua_state);
     static void lock_table_lib(lua_State *m_lua_state);
+    static void register_c_module(lua_State *m_lua_state, const char *name, lua_CFunction function);
 };

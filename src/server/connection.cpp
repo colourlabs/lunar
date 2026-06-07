@@ -50,7 +50,7 @@ void Connection::on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf
     if (nread > 0) {
         llhttp_errno_t err = llhttp_execute(&self->m_parser, buf->base, nread);
         if (err != HPE_OK) {
-            Logger::error("http parse error: {}", llhttp_errno_name(err)); 
+            Logger::error("http parse error: {}", llhttp_errno_name(err));
             delete[] buf->base;
             self->close();
             return;
@@ -91,6 +91,31 @@ int Connection::on_message_complete(llhttp_t *parser) {
     self->m_req.m_method = llhttp_method_name(static_cast<llhttp_method_t>(self->m_parser.method));
     self->m_current_field.clear();
 
+    const std::string &raw = self->m_req.m_path;
+    auto querypos = raw.find('?');
+    if (querypos != std::string::npos) {
+        std::string query_str = raw.substr(querypos + 1);
+        self->m_req.m_path = HTTPUtils::url_decode(raw.substr(0, querypos));
+
+        size_t pos = 0;
+        while (pos < query_str.size()) {
+            auto amp = query_str.find('&', pos);
+            std::string pair =
+                query_str.substr(pos, amp == std::string::npos ? std::string::npos : amp - pos);
+            auto equalpos = pair.find('=');
+            if (equalpos != std::string::npos) {
+                self->m_req.m_query[HTTPUtils::url_decode(pair.substr(0, equalpos))] =
+                    HTTPUtils::url_decode(pair.substr(equalpos + 1));
+            }
+            if (amp == std::string::npos) {
+                break;
+            }
+            pos = amp + 1;
+        }
+    } else {
+        self->m_req.m_path = HTTPUtils::url_decode(raw);
+    }
+
     uv_read_stop(static_cast<uv_stream_t *>(static_cast<void *>(&self->m_tcp)));
 
     LuaRequest req = std::move(self->m_req);
@@ -100,7 +125,8 @@ int Connection::on_message_complete(llhttp_t *parser) {
         std::move(req),
         [self](const LuaResponse &res) {
             self->write_response(res);
-            uv_read_start(static_cast<uv_stream_t *>(static_cast<void *>(&self->m_tcp)), on_alloc, on_read);
+            uv_read_start(static_cast<uv_stream_t *>(static_cast<void *>(&self->m_tcp)), on_alloc,
+                          on_read);
         },
         self->m_loop);
 
@@ -109,12 +135,13 @@ int Connection::on_message_complete(llhttp_t *parser) {
 
 void Connection::write_response(const LuaResponse &res) {
     auto *str_buf = new std::string(HTTPUtils::build_response(res));
-    
+
     auto *write_req = new uv_write_t;
     write_req->data = str_buf;
 
     uv_buf_t uvbuf = uv_buf_init(str_buf->data(), str_buf->size());
-    uv_write(write_req, static_cast<uv_stream_t *>(static_cast<void *>(&m_tcp)), &uvbuf, 1, on_write_done);
+    uv_write(write_req, static_cast<uv_stream_t *>(static_cast<void *>(&m_tcp)), &uvbuf, 1,
+             on_write_done);
 }
 
 void Connection::on_write_done(uv_write_t *write_req, int /*unused*/) {

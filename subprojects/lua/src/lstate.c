@@ -337,13 +337,17 @@ LUA_API lua_State *lua_newstate (lua_Alloc f, void *ud, unsigned seed) {
   int i;
   lua_State *L;
   global_State *g = cast(global_State*,
-                       (*f)(ud, NULL, LUA_TTHREAD, sizeof(global_State)));
+                         (*f)(ud, NULL, LUA_TTHREAD, sizeof(global_State)));
   if (g == NULL) return NULL;
   L = &g->mainth.l;
   L->tt = LUA_VTHREAD;
   g->currentwhite = bitmask(WHITE0BIT);
   L->marked = luaC_white(g);
   preinit_thread(L, g);
+
+  /* lunar: zero extra space before any string interning happens */
+  memset(lua_getextraspace(L), 0, LUA_EXTRASPACE);
+  
   g->allgc = obj2gco(L);  /* by now, only object is the main thread */
   L->next = NULL;
   incnny(L);  /* main thread is always non yieldable */

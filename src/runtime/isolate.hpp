@@ -1,6 +1,7 @@
 #pragma once
 #include <lua.hpp>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -33,8 +34,11 @@ class Isolate {
     Isolate(Isolate &&other) noexcept;
     Isolate &operator=(Isolate &&other) noexcept;
 
-    std::optional<LuaResponse> dispatch(const LuaRequest &req);
-
+    std::optional<LuaResponse> dispatch(const LuaRequest &req) {
+      std::lock_guard<std::mutex> lock(m_mutex);
+      return dispatch_impl(req);
+  }
+  
     [[nodiscard]] bool ok() const { return m_lua_state != nullptr; }
     [[nodiscard]] const std::string &error() const { return m_last_error; }
 
@@ -46,11 +50,16 @@ class Isolate {
     }
     [[nodiscard]] size_t memory_peak() const { return m_alloc_state.m_peak; }
 
+
   private:
+    LunarLimits m_limits;
     LunarAllocState m_alloc_state;
     lua_State *m_lua_state = nullptr;
     std::string m_last_error;
     int m_worker_env_ref = LUA_NOREF;
+
+    std::mutex m_mutex;
+    std::optional<LuaResponse> dispatch_impl(const LuaRequest &req);
 
     bool load_worker(const std::string &path);
     void push_request(const LuaRequest &req);

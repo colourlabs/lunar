@@ -4,6 +4,9 @@
 #include <filesystem>
 #include <string>
 
+#include "stdlib/fetch/fetch.hpp"
+#include "stdlib/json/json.hpp"
+
 static const std::array safe_libs = {
     luaL_Reg{"_G", luaopen_base},
     luaL_Reg{"string", luaopen_string},
@@ -16,7 +19,7 @@ static const std::array safe_libs = {
 void Sandbox::install(lua_State *m_lua_state, const std::string &std_path) {
     open_safe_libs(m_lua_state);
     remove_unsafe_globals(m_lua_state);
-    
+
     // make certain stuff readonly
     lock_string_metatable(m_lua_state);
     lock_string_lib(m_lua_state);
@@ -25,6 +28,10 @@ void Sandbox::install(lua_State *m_lua_state, const std::string &std_path) {
 
     // install custom require
     install_require(m_lua_state, std_path);
+
+    // register c modules
+    register_c_module(m_lua_state, "lunar/json", luaopen_json);
+    register_c_module(m_lua_state, "lunar/fetch", luaopen_fetch);
 }
 
 void Sandbox::open_safe_libs(lua_State *m_lua_state) {
@@ -127,12 +134,12 @@ int Sandbox::lua_require(lua_State *m_lua_state) {
 }
 
 void Sandbox::lock_string_metatable(lua_State *m_lua_state) {
-    lua_pushliteral(m_lua_state, ""); // stack: [""]
+    lua_pushliteral(m_lua_state, "");  // stack: [""]
     lua_getmetatable(m_lua_state, -1); // stack: ["", metatable]
-    lua_remove(m_lua_state, -2); // stack: [metatable]  -- remove the string, keep metatable
+    lua_remove(m_lua_state, -2);       // stack: [metatable]  -- remove the string, keep metatable
 
     lua_pushboolean(m_lua_state, 0);
-    lua_setfield(m_lua_state, -2, "__metatable");  // stack: [metatable]
+    lua_setfield(m_lua_state, -2, "__metatable"); // stack: [metatable]
 
     lua_pushcfunction(m_lua_state, [](lua_State *m_lua_state) -> int {
         return luaL_error(m_lua_state, "attempt to modify read-only string library");
@@ -145,7 +152,7 @@ void Sandbox::lock_string_metatable(lua_State *m_lua_state) {
 void Sandbox::lock_string_lib(lua_State *m_lua_state) {
     lua_getglobal(m_lua_state, "string");
 
-    lua_newtable(m_lua_state); 
+    lua_newtable(m_lua_state);
     lua_newtable(m_lua_state);
 
     lua_pushvalue(m_lua_state, -3);
@@ -159,7 +166,7 @@ void Sandbox::lock_string_lib(lua_State *m_lua_state) {
     lua_pushboolean(m_lua_state, 0);
     lua_setfield(m_lua_state, -2, "__metatable");
 
-    lua_setmetatable(m_lua_state, -2); 
+    lua_setmetatable(m_lua_state, -2);
 
     lua_setglobal(m_lua_state, "string");
     lua_pop(m_lua_state, 1);
@@ -208,5 +215,13 @@ void Sandbox::lock_table_lib(lua_State *m_lua_state) {
     lua_setmetatable(m_lua_state, -2);
 
     lua_setglobal(m_lua_state, "table");
+    lua_pop(m_lua_state, 1);
+}
+
+void Sandbox::register_c_module(lua_State *m_lua_state, const char *name, lua_CFunction function) {
+    lua_getfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_modules");
+    lua_pushcfunction(m_lua_state, function);
+    lua_call(m_lua_state, 0, 1);
+    lua_setfield(m_lua_state, -2, name);
     lua_pop(m_lua_state, 1);
 }

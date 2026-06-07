@@ -22,5 +22,6 @@ namespace HTTPUtils {
         }
     }
 
+    std::string url_decode(const std::string &string);
     std::string build_response(const LuaResponse &res);
 }
