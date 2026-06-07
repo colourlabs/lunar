@@ -1,6 +1,6 @@
-lunar adds on a meson.build file for building purposes,
+lunar adds on a meson.build file for building purposes and some sandboxing patches onto the base Lua 5.5.0 source.
 
-===
+---
 
 This is Lua 5.5.0, released on 15 Dec 2025.
 

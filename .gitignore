@@ -9,6 +9,8 @@ meson-private/
 
 # vendored subproject sources 
 subprojects/libuv-v1.51.0/
+subprojects/spdlog-1.17.0/
+subprojects/llhttp-release-v9.4.1/
 subprojects/packagecache/
 
 # editor

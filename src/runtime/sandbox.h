@@ -13,4 +13,9 @@ class Sandbox {
     static void install_require(lua_State *m_lua_state, const std::string& std_path);
     static void remove_unsafe_globals(lua_State *m_lua_state);
     static int lua_require(lua_State *m_lua_state);
+
+    static void lock_string_metatable(lua_State *m_lua_state);
+    static void lock_string_lib(lua_State *m_lua_state);
+    static void lock_math_lib(lua_State *m_lua_state);
+    static void lock_table_lib(lua_State *m_lua_state);
 };

@@ -1,4 +1,4 @@
-project('lua', 'c', version: '5.5.0')
+project('lua_lunar', 'c', version: '5.5.0')
 
 lua_inc = include_directories('src', 'lunar')
 

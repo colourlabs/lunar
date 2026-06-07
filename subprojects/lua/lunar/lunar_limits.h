@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdbool.h>
+
 #include "lua.h"
 
 #ifdef __cplusplus
@@ -33,7 +35,7 @@ LunarLimits* lunar_get_limits(lua_State* m_lua_state);
 
 // install limits into a lua_State
 // must be called before loading user code
-void lunar_install_limits(lua_State* m_lua_state);
+bool lunar_install_limits(lua_State* m_lua_state);
 
 // instruction limit
 void lunar_set_instruction_limit(lua_State* m_lua_state, unsigned int limit);

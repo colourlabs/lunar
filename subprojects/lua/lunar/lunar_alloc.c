@@ -1,38 +1,53 @@
 #include "lunar_alloc.h"
+#include <stdio.h>
 #include <stdlib.h>
-
 
 // stored in the lua_State's ud pointer via lua_newstate
 // retrieved via lua_getallocf
+void *lunar_alloc(void *user_data, void *pointer, size_t osize, size_t nsize) {
+    LunarAllocState *state = (LunarAllocState *)user_data;
 
-void* lunar_alloc(void* user_data, void* pointer, size_t osize, size_t nsize) {
-    LunarAllocState* state = (LunarAllocState*)user_data;
-
-    // freeing
     if (nsize == 0) {
         if (pointer != NULL) {
-            state->m_used -= osize;
+            if (osize > state->m_used - state->m_baseline) {
+                // freeing a baseline object during teardown, clamp
+                state->m_used = state->m_baseline;
+            } else {
+                state->m_used -= osize;
+            }
             free(pointer);
         }
         return NULL;
     }
 
-    // calculate new usage
-    size_t new_used = state->m_used + nsize - osize;
+    // compute new_used from current m_used (net delta from osize -> nsize)
+    size_t new_used = state->m_used;
 
-    // enforce limit
-    if (new_used > state->m_limit) {
-        return NULL;  // Lua raises a memory error on NULL
-    }
-
-    void* result = realloc(pointer, nsize);
-
-    if (result != NULL) {
-        state->m_used = new_used;
-        if (state->m_used > state->m_peak) {
-            state->m_peak = state->m_used;
+    if (nsize > osize) {
+        size_t delta = nsize - osize;
+        size_t headroom = state->m_limit - state->m_baseline;
+        size_t current_above_baseline = new_used - state->m_baseline;
+        if (delta > headroom || current_above_baseline > headroom - delta) {
+            return NULL;
         }
+        new_used += delta;
+    } else {
+        new_used -= (osize - nsize);
     }
 
+    void *result = realloc(pointer, nsize);
+
+    if (result == NULL) {
+        if (nsize < osize) {
+            return pointer;
+        }
+        return NULL;
+    }
+
+    // realloc succeeded - commit the new accounting
+    state->m_used = new_used;
+    if (state->m_used > state->m_peak) {
+        state->m_peak = state->m_used;
+    }
     return result;
 }

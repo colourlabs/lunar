@@ -1,5 +1,6 @@
 #include "lunar_limits.h"
 #include "lauxlib.h"
+#include <stdbool.h>
 #include <stdlib.h>
 
 enum {
@@ -11,24 +12,23 @@ enum {
 
 static const size_t default_max_string_len = 1024 * 1024;
 
-void lunar_install_limits(lua_State *m_lua_state) {
+bool lunar_install_limits(lua_State *m_lua_state) {
     LunarLimits *limits = (LunarLimits *)malloc(sizeof(LunarLimits));
-
     if (limits == NULL) {
-        luaL_error(m_lua_state, "failed to allocate limits struct");
-        return;
+        return false;  // caller sets m_last_error and closes state cleanly
     }
 
-    limits->m_instruction_count = 0;
-    limits->m_instruction_limit = DEFAULT_INSTRUCTION_LIMIT;
-    limits->m_max_string_len = default_max_string_len;
-    limits->m_max_string_count = DEFAULT_MAX_STRING_COUNT;
-    limits->m_coroutine_count = 0;
-    limits->m_coroutine_limit = DEFAULT_COROUTINE_LIMIT;
-    limits->m_pattern_steps = 0;
-    limits->m_pattern_step_limit = DEFAULT_PATTERN_STEP_LIMIT;
+    limits->m_instruction_count   = 0;
+    limits->m_instruction_limit   = DEFAULT_INSTRUCTION_LIMIT;
+    limits->m_max_string_len      = default_max_string_len;
+    limits->m_max_string_count    = DEFAULT_MAX_STRING_COUNT;
+    limits->m_coroutine_count     = 0;
+    limits->m_coroutine_limit     = DEFAULT_COROUTINE_LIMIT;
+    limits->m_pattern_steps       = 0;
+    limits->m_pattern_step_limit  = DEFAULT_PATTERN_STEP_LIMIT;
 
     *(LunarLimits **)lua_getextraspace(m_lua_state) = limits;
+    return true;
 }
 
 LunarLimits *lunar_get_limits(lua_State *m_lua_state) {

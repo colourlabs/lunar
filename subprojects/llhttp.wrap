@@ -1,7 +1,10 @@
-[wrap-git]
-url = https://github.com/nodejs/llhttp.git
-revision = release/v9.4.1
-depth = 1
+[wrap-file]
+directory = llhttp-release-v9.4.1
+source_url = https://github.com/nodejs/llhttp/archive/refs/tags/release/v9.4.1.tar.gz
+source_filename = llhttp-9.4.1.tar.gz
+source_hash = 86a8c16759fdcc7aa2c9841fbe8ba2e77ea98be7d5d45615f2604776d0ff78c7
+
+patch_directory = llhttp
 
 [provide]
 llhttp = llhttp_dep

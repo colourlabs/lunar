@@ -1,8 +1,8 @@
 #pragma once
+#include <lua.hpp>
 #include <map>
 #include <optional>
 #include <string>
-#include <lua.hpp>
 
 #include "lunar_alloc.h"
 
@@ -23,7 +23,7 @@ struct LuaResponse {
 
 // actual isolate
 class Isolate {
-public:
+  public:
     explicit Isolate(const std::string &worker_path, const std::string &std_path = "lunar");
     ~Isolate();
 
@@ -39,10 +39,14 @@ public:
     [[nodiscard]] const std::string &error() const { return m_last_error; }
 
     // expose allocator stats for monitoring
-    [[nodiscard]] size_t memory_used() const { return m_alloc_state.m_used; }
+    [[nodiscard]] size_t memory_used() const {
+        size_t used = m_alloc_state.m_used;
+        size_t base = m_alloc_state.m_baseline;
+        return used > base ? used - base : 0;
+    }
     [[nodiscard]] size_t memory_peak() const { return m_alloc_state.m_peak; }
 
-private:
+  private:
     LunarAllocState m_alloc_state;
     lua_State *m_lua_state = nullptr;
     std::string m_last_error;

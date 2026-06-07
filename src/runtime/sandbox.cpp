@@ -16,6 +16,14 @@ static const std::array safe_libs = {
 void Sandbox::install(lua_State *m_lua_state, const std::string &std_path) {
     open_safe_libs(m_lua_state);
     remove_unsafe_globals(m_lua_state);
+    
+    // make certain stuff readonly
+    lock_string_metatable(m_lua_state);
+    lock_string_lib(m_lua_state);
+    lock_math_lib(m_lua_state);
+    lock_table_lib(m_lua_state);
+
+    // install custom require
     install_require(m_lua_state, std_path);
 }
 
@@ -116,4 +124,89 @@ int Sandbox::lua_require(lua_State *m_lua_state) {
 
     // return module table
     return 1;
+}
+
+void Sandbox::lock_string_metatable(lua_State *m_lua_state) {
+    lua_pushliteral(m_lua_state, ""); // stack: [""]
+    lua_getmetatable(m_lua_state, -1); // stack: ["", metatable]
+    lua_remove(m_lua_state, -2); // stack: [metatable]  -- remove the string, keep metatable
+
+    lua_pushboolean(m_lua_state, 0);
+    lua_setfield(m_lua_state, -2, "__metatable");  // stack: [metatable]
+
+    lua_pushcfunction(m_lua_state, [](lua_State *m_lua_state) -> int {
+        return luaL_error(m_lua_state, "attempt to modify read-only string library");
+    });
+    lua_setfield(m_lua_state, -2, "__newindex"); // stack: [metatable]
+
+    lua_pop(m_lua_state, 1); // stack: []
+}
+
+void Sandbox::lock_string_lib(lua_State *m_lua_state) {
+    lua_getglobal(m_lua_state, "string");
+
+    lua_newtable(m_lua_state); 
+    lua_newtable(m_lua_state);
+
+    lua_pushvalue(m_lua_state, -3);
+    lua_setfield(m_lua_state, -2, "__index");
+
+    lua_pushcfunction(m_lua_state, [](lua_State *m_lua_state) -> int {
+        return luaL_error(m_lua_state, "attempt to modify read-only string library");
+    });
+    lua_setfield(m_lua_state, -2, "__newindex");
+
+    lua_pushboolean(m_lua_state, 0);
+    lua_setfield(m_lua_state, -2, "__metatable");
+
+    lua_setmetatable(m_lua_state, -2); 
+
+    lua_setglobal(m_lua_state, "string");
+    lua_pop(m_lua_state, 1);
+}
+
+void Sandbox::lock_math_lib(lua_State *m_lua_state) {
+    lua_getglobal(m_lua_state, "math");
+
+    lua_newtable(m_lua_state);
+    lua_newtable(m_lua_state);
+
+    lua_pushvalue(m_lua_state, -3);
+    lua_setfield(m_lua_state, -2, "__index");
+
+    lua_pushcfunction(m_lua_state, [](lua_State *m_lua_state) -> int {
+        return luaL_error(m_lua_state, "attempt to modify read-only math library");
+    });
+    lua_setfield(m_lua_state, -2, "__newindex");
+
+    lua_pushboolean(m_lua_state, 0);
+    lua_setfield(m_lua_state, -2, "__metatable");
+
+    lua_setmetatable(m_lua_state, -2);
+
+    lua_setglobal(m_lua_state, "math");
+    lua_pop(m_lua_state, 1);
+}
+
+void Sandbox::lock_table_lib(lua_State *m_lua_state) {
+    lua_getglobal(m_lua_state, "table");
+
+    lua_newtable(m_lua_state);
+    lua_newtable(m_lua_state);
+
+    lua_pushvalue(m_lua_state, -3);
+    lua_setfield(m_lua_state, -2, "__index");
+
+    lua_pushcfunction(m_lua_state, [](lua_State *m_lua_state) -> int {
+        return luaL_error(m_lua_state, "attempt to modify read-only table library");
+    });
+    lua_setfield(m_lua_state, -2, "__newindex");
+
+    lua_pushboolean(m_lua_state, 0);
+    lua_setfield(m_lua_state, -2, "__metatable");
+
+    lua_setmetatable(m_lua_state, -2);
+
+    lua_setglobal(m_lua_state, "table");
+    lua_pop(m_lua_state, 1);
 }
