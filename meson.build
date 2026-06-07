@@ -10,6 +10,22 @@ project(
     ],
 )
 
+if get_option('buildtype') == 'debugoptimized' or get_option('profile')
+    add_project_arguments(
+        '-fno-omit-frame-pointer',
+        language: ['c', 'cpp'],
+    )
+endif
+
+if get_option('profile')
+    add_project_arguments(
+        '-fno-inline-small-functions',
+        '-g',
+        '-O2',
+        language: ['c', 'cpp'],
+    )
+endif
+
 # dependencies
 lua_lunar = dependency('lua_lunar',
     fallback: ['lua', 'lua_dep'],
@@ -49,7 +65,8 @@ src = files(
     'src/utils/http.cpp',
     'src/utils/bootstrap.cpp',
     'src/stdlib/json/json.cpp',
-    'src/stdlib/fetch/fetch.cpp'
+    'src/stdlib/fetch/fetch.cpp',
+    'src/stdlib/fetch/curl_uv_context.cpp'
 )
 
 # main executable
@@ -78,8 +95,13 @@ all_src = [
     'src/utils/http.cpp',
     'src/utils/http.hpp',
     'src/utils/logger.cpp',
-    'src/stdlib/json.cpp',
-    'src/stdlib/json.hpp'
+    'src/stdlib/json/json.cpp',
+    'src/stdlib/json/json.hpp',
+    'src/stdlib/fetch/curl_uv_context.cpp',
+    'src/stdlib/fetch/curl_uv_context.hpp',
+    'src/stdlib/fetch/fetch_limits.cpp',
+    'src/stdlib/fetch/fetch.cpp',
+    'src/stdlib/fetch/fetch.hpp'
 ]
 
 run_target('lint',

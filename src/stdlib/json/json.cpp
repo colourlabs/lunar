@@ -203,6 +203,8 @@ static void encode_lua_value(lua_State *m_lua_state, yyjson_mut_doc *doc, yyjson
     }
 
     case LUA_TTABLE: {
+        luaL_checkstack(m_lua_state, 4, "json.encode: too deeply nested");
+        
         lua_Integer max_n = 0;
         if (lua_table_is_array(m_lua_state, idx, max_n)) {
             yyjson_mut_val *arr = yyjson_mut_arr(doc);

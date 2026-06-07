@@ -1,21 +1,22 @@
 #include "bootstrap.hpp"
 #include "utils/logger.hpp"
 #include <curl/curl.h>
-#include <iostream>
+#include <stdexcept>
 
 namespace Lunar {
 
 Bootstrap::Bootstrap() {
-    Logger::init(); 
-    
+    Logger::init();
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != 0) {
-        std::cerr << "critical: Failed to initialize libcurl!\n";
-        std::exit(EXIT_FAILURE);
+        throw std::runtime_error("failed to initialize libcurl");
     }
+    m_curl_initialized = true;
 }
 
 Bootstrap::~Bootstrap() {
-    curl_global_cleanup();
+    if (m_curl_initialized) {
+        curl_global_cleanup();
+    }
 }
 
 } // namespace Lunar

@@ -3,15 +3,17 @@
 namespace Lunar {
 
 class Bootstrap {
-public:
+  public:
     Bootstrap();
     ~Bootstrap();
 
-    Bootstrap(const Bootstrap&) = delete;
-    Bootstrap& operator=(const Bootstrap&) = delete;
+    Bootstrap(const Bootstrap &) = delete;
+    Bootstrap &operator=(const Bootstrap &) = delete;
+    Bootstrap(Bootstrap &&) = delete;
+    Bootstrap &operator=(Bootstrap &&) = delete;
 
-    Bootstrap(Bootstrap&&) noexcept = default;
-    Bootstrap& operator=(Bootstrap&&) noexcept = default;
+  private:
+    bool m_curl_initialized = false;
 };
 
 } // namespace Lunar

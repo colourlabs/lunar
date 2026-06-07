@@ -4,14 +4,11 @@
 #include "utils/logger.hpp"
 
 Isolate::Isolate(const std::string &worker_path, const std::string &std_path)
-    : m_limits(),
-      m_alloc_state({
-          .m_used = 0,
-          .m_limit = 128ULL * 1024 * 1024,
-          .m_peak = 0,
-          .m_baseline = 0,
-          .m_limits = &m_limits
-      }),
+    : m_limits(), m_alloc_state({.m_used = 0,
+                                 .m_limit = 128ULL * 1024 * 1024,
+                                 .m_peak = 0,
+                                 .m_baseline = 0,
+                                 .m_limits = &m_limits}),
       m_lua_state(lua_newstate(lunar_alloc, &m_alloc_state, 0)) {
     if (m_lua_state == nullptr) {
         m_last_error = "failed to create Lua state (out of memory?)";
@@ -63,9 +60,9 @@ Isolate::~Isolate() {
 Isolate::Isolate(Isolate &&other) noexcept
     : m_limits(other.m_limits), m_alloc_state(other.m_alloc_state), m_lua_state(other.m_lua_state),
       m_last_error(std::move(other.m_last_error)), m_worker_env_ref(other.m_worker_env_ref) {
-    
+
     m_alloc_state.m_limits = &m_limits;
-    
+
     if (m_lua_state != nullptr) {
         lua_setallocf(m_lua_state, lunar_alloc, &m_alloc_state);
     }
@@ -135,43 +132,42 @@ bool Isolate::load_worker(const std::string &path) {
     return true;
 }
 
-void Isolate::push_request(const LuaRequest &req) {
-    // push req table
-    lua_newtable(m_lua_state);
+void Isolate::push_request(lua_State *thread, const LuaRequest &req) {
+    lua_newtable(thread);
 
     // req.method
-    lua_pushstring(m_lua_state, req.m_method.c_str());
-    lua_setfield(m_lua_state, -2, "method");
+    lua_pushstring(thread, req.m_method.c_str());
+    lua_setfield(thread, -2, "method");
 
     // req.path
-    lua_pushstring(m_lua_state, req.m_path.c_str());
-    lua_setfield(m_lua_state, -2, "path");
+    lua_pushstring(thread, req.m_path.c_str());
+    lua_setfield(thread, -2, "path");
 
     // req.body
-    lua_pushstring(m_lua_state, req.m_body.c_str());
-    lua_setfield(m_lua_state, -2, "body");
+    lua_pushstring(thread, req.m_body.c_str());
+    lua_setfield(thread, -2, "body");
 
     // req.headers
-    lua_newtable(m_lua_state);
+    lua_newtable(thread);
     for (const auto &[k, v] : req.m_headers) {
-        lua_pushstring(m_lua_state, v.c_str());
-        lua_setfield(m_lua_state, -2, k.c_str());
+        lua_pushstring(thread, v.c_str());
+        lua_setfield(thread, -2, k.c_str());
     }
-    lua_setfield(m_lua_state, -2, "headers");
+    lua_setfield(thread, -2, "headers");
 
     // req.query
-    lua_newtable(m_lua_state);
+    lua_newtable(thread);
     for (const auto &[k, v] : req.m_query) {
-        lua_pushstring(m_lua_state, v.c_str());
-        lua_setfield(m_lua_state, -2, k.c_str());
+        lua_pushstring(thread, v.c_str());
+        lua_setfield(thread, -2, k.c_str());
     }
-    lua_setfield(m_lua_state, -2, "query");
+    lua_setfield(thread, -2, "query");
 }
 
-LuaResponse Isolate::read_response() {
+LuaResponse Isolate::read_response(lua_State *thread) {
     LuaResponse res;
 
-    if (!lua_istable(m_lua_state, -1)) {
+    if (!lua_istable(thread, -1)) {
         m_last_error = "handle() must return a table";
         res.m_status = 500;
         res.m_body = m_last_error;
@@ -179,83 +175,138 @@ LuaResponse Isolate::read_response() {
     }
 
     // read status
-    lua_getfield(m_lua_state, -1, "status");
+    lua_getfield(thread, -1, "status");
     res.m_status =
-        (lua_isinteger(m_lua_state, -1) != 0) ? (int)lua_tointeger(m_lua_state, -1) : 200;
-    lua_pop(m_lua_state, 1);
+        (lua_isinteger(thread, -1) != 0) ? static_cast<int>(lua_tointeger(thread, -1)) : 200;
+    lua_pop(thread, 1);
 
     // read body
-    lua_getfield(m_lua_state, -1, "body");
-    res.m_body = (lua_isstring(m_lua_state, -1) != 0) ? lua_tostring(m_lua_state, -1) : "";
-    lua_pop(m_lua_state, 1);
+    lua_getfield(thread, -1, "body");
+    res.m_body = (lua_isstring(thread, -1) != 0) ? lua_tostring(thread, -1) : "";
+    lua_pop(thread, 1);
 
     // read headers
-    lua_getfield(m_lua_state, -1, "headers");
-    if (lua_istable(m_lua_state, -1)) {
-        lua_pushnil(m_lua_state);
-        while (lua_next(m_lua_state, -2) != 0) {
-            if ((lua_isstring(m_lua_state, -2) != 0) && (lua_isstring(m_lua_state, -1) != 0)) {
-                std::string key = lua_tostring(m_lua_state, -2);
-                std::string value = lua_tostring(m_lua_state, -1);
+    lua_getfield(thread, -1, "headers");
+    if (lua_istable(thread, -1)) {
+        lua_pushnil(thread);
+        while (lua_next(thread, -2) != 0) {
+            if ((lua_isstring(thread, -2) != 0) && (lua_isstring(thread, -1) != 0)) {
+                std::string key = lua_tostring(thread, -2);
+                std::string value = lua_tostring(thread, -1);
                 res.m_headers[key] = value;
             }
-            lua_pop(m_lua_state, 1); // pop value, keep key for next iteration
+            lua_pop(thread, 1); // pop value, keep key for next iteration
         }
     }
-    lua_pop(m_lua_state, 1); // pop headers table
+    lua_pop(thread, 1); // pop headers table
 
     return res;
 }
 
-std::optional<LuaResponse> Isolate::dispatch_impl(const LuaRequest &req) {
-    static constexpr size_t max_body = 1024 * 1024; // 1MB
-    static constexpr size_t max_header = 8 * 1024;  // 8KB per value
+void Isolate::dispatch_async(const LuaRequest &req, uv_loop_t *loop,
+                             std::function<void(std::optional<LuaResponse>)> on_done) {
+    lunar_reset_instruction_count(m_lua_state);
+
+    static constexpr size_t max_body = 1024 * 1024;
+    static constexpr size_t max_header = 8 * 1024;
     static constexpr size_t max_headers = 64;
 
     if (req.m_body.size() > max_body) {
         m_last_error = "request body too large";
-        return std::nullopt;
+        on_done(std::nullopt);
+        return;
     }
-
     if (req.m_headers.size() > max_headers) {
         m_last_error = "too many request headers";
-        return std::nullopt;
+        on_done(std::nullopt);
+        return;
     }
 
     for (const auto &[k, v] : req.m_headers) {
         if (k.size() > max_header || v.size() > max_header) {
             m_last_error = "request header too large";
-            return std::nullopt;
+            on_done(std::nullopt);
+            return;
         }
     }
 
-    lua_rawgeti(m_lua_state, LUA_REGISTRYINDEX, m_worker_env_ref);
-    lua_getfield(m_lua_state, -1, "handle");
-    lua_remove(m_lua_state, -2);
+    // stash the loop so lua_fetch can find it
+    lua_pushlightuserdata(m_lua_state, loop);
+    lua_setfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_uv_loop");
+    lua_pushlightuserdata(m_lua_state, this);
+    lua_setfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_isolate");
 
-    if (!lua_isfunction(m_lua_state, -1)) {
+    lua_State *thread = lua_newthread(m_lua_state);
+    int thread_ref = luaL_ref(m_lua_state, LUA_REGISTRYINDEX);
+
+    lua_rawgeti(thread, LUA_REGISTRYINDEX, m_worker_env_ref);
+    lua_getfield(thread, -1, "handle");
+    lua_remove(thread, -2);
+
+    if (!lua_isfunction(thread, -1)) {
         m_last_error = "handle() function not found in worker environment";
-        lua_pop(m_lua_state, 1);
-        return std::nullopt;
+        Logger::error("[isolate] handle() not found");
+        luaL_unref(m_lua_state, LUA_REGISTRYINDEX, thread_ref);
+        on_done(std::nullopt);
+        return;
     }
 
-    push_request(req);
+    push_request(thread, req);
+    m_pending[thread] = PendingRequest{
+        .m_on_done = std::move(on_done),
+        .m_thread_ref = thread_ref,
+    };
 
-    if (lua_pcall(m_lua_state, 1, 1, 0) != LUA_OK) {
-        m_last_error = lua_tostring(m_lua_state, -1);
-        lua_pop(m_lua_state, 1);
-        Logger::debug("[lua] used={} peak={} limit={}", m_alloc_state.m_used, m_alloc_state.m_peak, m_alloc_state.m_limit);
-        return std::nullopt;
+    Logger::debug("[isolate] starting coroutine");
+    step_coroutine(thread, 1);
+}
+
+void Isolate::step_coroutine(lua_State *thread, int nargs) {
+    int nres = 0;
+    int status = lua_resume(thread, nullptr, nargs, &nres);
+
+    Logger::debug("[isolate] lua_resume returned status={}", status);
+
+    if (status == LUA_YIELD) {
+        Logger::debug("[isolate] coroutine yielded (waiting for fetch)");
+        return;
     }
 
-    LuaResponse res = read_response();
-    lua_pop(m_lua_state, 1);
+    auto node = m_pending.extract(thread);
+    if (node.empty()) {
+        Logger::error("[isolate] step_coroutine: no pending entry for thread");
+        return;
+    }
 
-    Logger::debug("[lua] used={} peak={} limit={}", m_alloc_state.m_used, m_alloc_state.m_peak, m_alloc_state.m_limit);
+    PendingRequest pending = std::move(node.mapped());
+    luaL_unref(m_lua_state, LUA_REGISTRYINDEX, pending.m_thread_ref);
+
+    if (status != LUA_OK) {
+        m_last_error = lua_tostring(thread, -1);
+        Logger::error("[isolate] coroutine error: {}", m_last_error);
+        Logger::error("[isolate] used={} peak={} limit={} baseline={}",
+            m_alloc_state.m_used, m_alloc_state.m_peak,
+            m_alloc_state.m_limit, m_alloc_state.m_baseline);
+        lua_pop(thread, nres);
+        pending.m_on_done(std::nullopt);
+        return;
+    }
+
+    LuaResponse res = read_response(thread);
+    lua_pop(thread, nres);
+
+    Logger::debug("[lua] used={} peak={} limit={}", m_alloc_state.m_used, m_alloc_state.m_peak,
+                  m_alloc_state.m_limit);
 
     lua_gc(m_lua_state, LUA_GCCOLLECT, 0);
 
-    Logger::debug("[lua after gc] used={} peak={} limit={}", m_alloc_state.m_used, m_alloc_state.m_peak, m_alloc_state.m_limit);
+    Logger::debug("[lua after gc] used={} peak={} limit={}", m_alloc_state.m_used,
+                  m_alloc_state.m_peak, m_alloc_state.m_limit);
 
-    return res;
+    pending.m_on_done(res);
+}
+
+void Isolate::resume_coroutine(lua_State *thread, int nargs) {
+    // called from the fetch curl callback - just drive the coroutine forward
+    step_coroutine(thread, nargs);
 }

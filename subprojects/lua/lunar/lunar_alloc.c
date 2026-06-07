@@ -10,7 +10,6 @@ void *lunar_alloc(void *user_data, void *pointer, size_t osize, size_t nsize) {
     }
 
     LunarAllocState *state = (LunarAllocState *)user_data;
-
     if (state == NULL) {
         return realloc(pointer, nsize);
     }
@@ -18,7 +17,6 @@ void *lunar_alloc(void *user_data, void *pointer, size_t osize, size_t nsize) {
     if (nsize == 0) {
         if (pointer != NULL) {
             if (osize > state->m_used - state->m_baseline) {
-                // freeing a baseline object during teardown, clamp
                 state->m_used = state->m_baseline;
             } else {
                 state->m_used -= osize;
@@ -28,7 +26,10 @@ void *lunar_alloc(void *user_data, void *pointer, size_t osize, size_t nsize) {
         return NULL;
     }
 
-    // compute new_used from current m_used (net delta from osize -> nsize)
+    if (pointer == NULL) {
+        osize = 0; 
+    }
+
     size_t new_used = state->m_used;
 
     if (nsize > osize) {
@@ -63,7 +64,6 @@ void *lunar_alloc(void *user_data, void *pointer, size_t osize, size_t nsize) {
         return NULL;
     }
 
-    // realloc succeeded - commit the new accounting
     state->m_used = new_used;
     if (state->m_used > state->m_peak) {
         state->m_peak = state->m_used;

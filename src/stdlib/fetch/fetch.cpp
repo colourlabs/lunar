@@ -1,41 +1,30 @@
 #include "fetch.hpp"
+#include "curl_uv_context.hpp"
+#include "runtime/isolate.hpp"
+
 #include <cstring>
 #include <curl/curl.h>
 #include <string>
+#include <uv.h>
 #include <vector>
 
 static constexpr long default_timeout_ms = 10000;
 static constexpr long max_timeout_ms = 30000;
-static constexpr long max_response_body = 10 * 1024 * 1024; // 10MB
-static constexpr long max_response_headers = 64 * 1024; // 64KB
 
 // curl write callbacks
-
 struct FetchResponse {
     std::string m_body;
     std::string m_headers_raw;
     long m_status = 0;
 };
 
-static size_t write_body(char *ptr, size_t size, size_t nmemb, void *userdata) {
-    auto *res = static_cast<FetchResponse *>(userdata);
-    size_t total = size * nmemb;
-    if (res->m_body.size() + total > static_cast<size_t>(max_response_body)) {
-        return 0; // signal error to curl
-    }
-    res->m_body.append(ptr, total);
-    return total;
-}
-
-static size_t write_headers(char *ptr, size_t size, size_t nmemb, void *userdata) {
-    auto *res = static_cast<FetchResponse *>(userdata);
-    size_t total = size * nmemb;
-    if (res->m_headers_raw.size() + total > static_cast<size_t>(max_response_headers)) {
-        return total; // silently drop headers over limit
-    }
-    res->m_headers_raw.append(ptr, total);
-    return total;
-}
+struct FetchContinuation {
+    lua_State  *m_thread;
+    uv_loop_t  *m_loop;
+    Isolate    *m_isolate;
+    curl_slist *m_headers;
+    std::string m_body_buf;
+};
 
 // header parsing
 
@@ -128,7 +117,7 @@ static void push_response(lua_State *m_lua_state, const FetchResponse &res) {
     lua_setfield(m_lua_state, -2, "json");
 }
 
-// ── fetch options ────────────────────────────────────────────────────────────
+// fetch options
 
 struct FetchOptions {
     std::string m_method = "GET";
@@ -202,40 +191,43 @@ static int lua_fetch(lua_State *m_lua_state) {
     const char *url = luaL_checkstring(m_lua_state, 1);
     FetchOptions opts = parse_options(m_lua_state, 2);
 
+    lua_getfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_uv_loop");
+    if (!lua_islightuserdata(m_lua_state, -1)) {
+        lua_pop(m_lua_state, 1);
+        return luaL_error(m_lua_state, "fetch: no event loop available");
+    }
+    auto *loop = static_cast<uv_loop_t *>(lua_touserdata(m_lua_state, -1));
+    lua_pop(m_lua_state, 1);
+
+    lua_getfield(m_lua_state, LUA_REGISTRYINDEX, "lunar_isolate");
+    if (!lua_islightuserdata(m_lua_state, -1)) {
+        lua_pop(m_lua_state, 1);
+        return luaL_error(m_lua_state, "fetch: no isolate available");
+    }
+    auto *isolate = static_cast<Isolate *>(lua_touserdata(m_lua_state, -1));
+    lua_pop(m_lua_state, 1);
+
     CURL *curl = curl_easy_init();
     if (curl == nullptr) {
         return luaL_error(m_lua_state, "fetch: failed to init curl");
     }
 
-    FetchResponse res;
     curl_slist *headers = nullptr;
-
-    // set headers
     for (const auto &header : opts.m_headers) {
         headers = curl_slist_append(headers, header.c_str());
     }
 
-    // basic options
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, opts.m_timeout);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, opts.m_follow_redirects ? 1L : 0L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 10L);
-
-    // tls verification
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-
-    // write callbacks
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_body);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
-    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, write_headers);
-    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &res);
 
     if (headers != nullptr) {
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     }
 
-    // method + body
     if (opts.m_method == "POST") {
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(opts.m_body.size()));
@@ -248,21 +240,43 @@ static int lua_fetch(lua_State *m_lua_state) {
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, opts.m_method.c_str());
     }
 
-    CURLcode curl_res = curl_easy_perform(curl);
+    auto *cont = new FetchContinuation{
+        .m_thread   = m_lua_state,
+        .m_loop     = loop,
+        .m_isolate  = isolate,
+        .m_headers  = headers,
+        .m_body_buf = opts.m_body,
+    };
 
-    if (curl_res != CURLE_OK) {
-        std::string err = curl_easy_strerror(curl_res);
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-        return luaL_error(m_lua_state, "fetch: %s", err.c_str());
+    // re-point curl at the stable copy inside the continuation
+    if (opts.m_method == "POST" || opts.m_method == "PUT" || opts.m_method == "PATCH") {
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, cont->m_body_buf.c_str());
     }
 
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &res.m_status);
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
+    CurlUvContext::get(loop).add(curl, [cont](CURLcode code, CurlTransfer xfer) {
+        curl_slist_free_all(cont->m_headers);
 
-    push_response(m_lua_state, res);
-    return 1;
+        lua_State *thread  = cont->m_thread;
+        Isolate   *isolate = cont->m_isolate;
+        delete cont;
+
+        if (code != CURLE_OK) {
+            lua_pushnil(thread);
+            lua_pushstring(thread, curl_easy_strerror(code));
+            isolate->resume_coroutine(thread, 2);
+            return;
+        }
+
+        FetchResponse fres{
+            .m_body        = std::move(xfer.m_body),
+            .m_headers_raw = std::move(xfer.m_headers_raw),
+            .m_status      = xfer.m_status,
+        };
+        push_response(thread, fres);
+        isolate->resume_coroutine(thread, 1);
+    });
+
+    return lua_yield(m_lua_state, 0);
 }
 
 int luaopen_fetch(lua_State *m_lua_state) {
