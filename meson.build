@@ -38,6 +38,7 @@ src = files(
     'src/server/connection.cpp',
     'src/pool/isolate_pool.cpp',
     'src/utils/logger.cpp',
+    'src/utils/http.cpp',
 )
 
 # main executable
@@ -63,6 +64,8 @@ all_src = [
     'src/pool/isolate_pool.cpp',
     'src/pool/isolate_pool.hpp',
     'src/utils/logger.hpp',
+    'src/utils/http.cpp',
+    'src/utils/http.hpp',
     'src/utils/logger.cpp'
 ]
 
