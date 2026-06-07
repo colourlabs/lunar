@@ -1,6 +1,6 @@
-#include "pool/isolate_pool.h"
-#include "server/server.h"
-#include "utils/logger.h"
+#include "pool/isolate_pool.hpp"
+#include "server/server.hpp"
+#include "utils/logger.hpp"
 #include <span>
 #include <string>
 #include <uv.h>

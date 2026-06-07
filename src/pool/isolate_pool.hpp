@@ -1,6 +1,6 @@
 #pragma once
 
-#include "runtime/isolate.h"
+#include "runtime/isolate.hpp"
 #include <atomic>
 #include <functional>
 #include <uv.h>

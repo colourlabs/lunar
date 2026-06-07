@@ -1,8 +1,7 @@
-#include "connection.h"
-#include "pool/isolate_pool.h"
-#include "utils/logger.h"
-
-#include <sstream>
+#include "connection.hpp"
+#include "pool/isolate_pool.hpp"
+#include "utils/http.hpp"
+#include "utils/logger.hpp"
 
 Connection::Connection(uv_loop_t *loop, IsolatePool *pool)
     : m_loop(loop), m_tcp(), m_parser(), m_settings(), m_pool(pool) {
@@ -109,33 +108,8 @@ int Connection::on_message_complete(llhttp_t *parser) {
 }
 
 void Connection::write_response(const LuaResponse &res) {
-    std::ostringstream http;
-    http << "HTTP/1.1 " << res.m_status << " ";
-    switch (res.m_status) {
-    case 200:
-        http << "OK";
-        break;
-    case 400:
-        http << "Bad Request";
-        break;
-    case 404:
-        http << "Not Found";
-        break;
-    case 500:
-        http << "Internal Server Error";
-        break;
-    default:
-        http << "Unknown";
-        break;
-    }
-    http << "\r\n";
-    http << "Content-Length: " << res.m_body.size() << "\r\n";
-    for (const auto &[k, v] : res.m_headers) {
-        http << k << ": " << v << "\r\n";
-    }
-    http << "\r\n" << res.m_body;
-
-    auto *str_buf = new std::string(http.str());
+    auto *str_buf = new std::string(HTTPUtils::build_response(res));
+    
     auto *write_req = new uv_write_t;
     write_req->data = str_buf;
 

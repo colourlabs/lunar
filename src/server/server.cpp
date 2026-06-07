@@ -1,6 +1,6 @@
-#include "server.h"
-#include "connection.h"
-#include "utils/logger.h" // <-- Make sure to include your logger
+#include "server.hpp"
+#include "connection.hpp"
+#include "utils/logger.hpp"
 
 Server::Server(uv_loop_t *loop, IsolatePool *pool)
     : m_loop(loop), m_tcp{}, m_pool(pool)

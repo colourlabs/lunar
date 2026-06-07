@@ -53,16 +53,16 @@ executable(
 all_src = [
     'src/main.cpp',
     'src/runtime/isolate.cpp',
-    'src/runtime/isolate.h',
+    'src/runtime/isolate.hpp',
     'src/runtime/sandbox.cpp',
-    'src/runtime/sandbox.h',
+    'src/runtime/sandbox.hpp',
     'src/server/server.cpp',
-    'src/server/server.h',
+    'src/server/server.hpp',
     'src/server/connection.cpp',
-    'src/server/connection.h',
+    'src/server/connection.hpp',
     'src/pool/isolate_pool.cpp',
-    'src/pool/isolate_pool.h',
-    'src/utils/logger.h',
+    'src/pool/isolate_pool.hpp',
+    'src/utils/logger.hpp',
     'src/utils/logger.cpp'
 ]
 

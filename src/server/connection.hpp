@@ -1,5 +1,5 @@
 #pragma once
-#include "runtime/isolate.h"
+#include "runtime/isolate.hpp"
 #include <llhttp.h>
 #include <string>
 #include <uv.h>

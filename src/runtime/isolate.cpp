@@ -1,6 +1,6 @@
-#include "isolate.h"
+#include "isolate.hpp"
 #include "lunar_limits.h"
-#include "sandbox.h"
+#include "sandbox.hpp"
 
 Isolate::Isolate(const std::string &worker_path, const std::string &std_path)
     : m_alloc_state({.m_used = 0, .m_limit = 128ULL * 1024 * 1024, .m_peak = 0, .m_baseline = 0}),

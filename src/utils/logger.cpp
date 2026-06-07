@@ -1,4 +1,4 @@
-#include "logger.h"
+#include "logger.hpp"
 
 #include <memory>
 #include <spdlog/async.h>

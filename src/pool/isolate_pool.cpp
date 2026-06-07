@@ -1,4 +1,4 @@
-#include "isolate_pool.h"
+#include "isolate_pool.hpp"
 
 IsolatePool::IsolatePool(const std::string &worker, const std::string &std_path, size_t count) {
     m_isolates.reserve(count);
