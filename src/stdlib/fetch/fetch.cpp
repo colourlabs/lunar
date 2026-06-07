@@ -7,7 +7,7 @@
 static constexpr long default_timeout_ms = 10000;
 static constexpr long max_timeout_ms = 30000;
 static constexpr long max_response_body = 10 * 1024 * 1024; // 10MB
-static constexpr long max_response_headers = 64 * 1024;     // 64KB
+static constexpr long max_response_headers = 64 * 1024; // 64KB
 
 // curl write callbacks
 

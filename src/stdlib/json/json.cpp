@@ -5,6 +5,16 @@
 
 static constexpr int max_depth = 64;
 
+static void* get_empty_object_marker() {
+    static char marker = 0;
+    return &marker;
+}
+
+static void* get_empty_array_marker() {
+    static char marker = 0;
+    return &marker;
+}
+
 // decode: yyjson -> lua
 
 static void push_yyjson_value(lua_State *m_lua_state, yyjson_val *val, int depth) {
@@ -114,6 +124,23 @@ static void encode_lua_number(lua_State *m_lua_state, yyjson_mut_doc *doc, yyjso
 
 static bool lua_table_is_array(lua_State *m_lua_state, int idx, lua_Integer &out_max) {
     out_max = 0;
+    
+    lua_pushnil(m_lua_state);
+    bool is_empty = (lua_next(m_lua_state, idx) == 0);
+    
+    if (is_empty) {
+        lua_getfield(m_lua_state, LUA_REGISTRYINDEX, "LUNAR_JSON_ARRAY_MT");
+        
+        if (lua_getmetatable(m_lua_state, idx) != 0) {
+            bool has_array_mt = (lua_rawequal(m_lua_state, -1, -2) != 0);
+            lua_pop(m_lua_state, 2);
+            return has_array_mt;
+        }
+        
+        lua_pop(m_lua_state, 1);
+        return false;
+    }
+
     lua_pushnil(m_lua_state);
     while (lua_next(m_lua_state, idx) != 0) {
         if (lua_isinteger(m_lua_state, -2) != 0) {
@@ -126,10 +153,6 @@ static bool lua_table_is_array(lua_State *m_lua_state, int idx, lua_Integer &out
         }
         lua_pop(m_lua_state, 2);
         return false;
-    }
-
-    if (out_max == 0) {
-        return true;
     }
 
     lua_Integer count = 0;
@@ -211,6 +234,19 @@ static void encode_lua_value(lua_State *m_lua_state, yyjson_mut_doc *doc, yyjson
         break;
     }
 
+    case LUA_TLIGHTUSERDATA: {
+        void* ptr = lua_touserdata(m_lua_state, idx);
+        
+        if (ptr == get_empty_object_marker()) {
+            append(yyjson_mut_obj(doc));
+        } else if (ptr == get_empty_array_marker()) {
+            append(yyjson_mut_arr(doc));
+        } else {
+            luaL_error(m_lua_state, "json.encode: unrecognized light userdata");
+        }
+        break;
+    }
+
     default:
         luaL_error(m_lua_state, "json.encode: cannot encode %s",
                    lua_typename(m_lua_state, lua_type(m_lua_state, idx)));
@@ -258,5 +294,24 @@ static const luaL_Reg json_lib[] = {
 int luaopen_json(lua_State *m_lua_state) {
     // NOLINTNEXTLINE(readability-math-missing-parentheses,cppcoreguidelines-pro-bounds-array-to-pointer-decay)
     luaL_newlib(m_lua_state, json_lib);
+
+    lua_createtable(m_lua_state, 0, 1);
+    lua_pushstring(m_lua_state, "array");
+    lua_setfield(m_lua_state, -2, "__jsontype");
+    
+    lua_pushvalue(m_lua_state, -1);
+    lua_setfield(m_lua_state, -3, "array_mt");
+    
+    lua_pushvalue(m_lua_state, -1);
+    lua_setfield(m_lua_state, LUA_REGISTRYINDEX, "LUNAR_JSON_ARRAY_MT");
+
+    lua_pop(m_lua_state, 1);
+
+    lua_pushlightuserdata(m_lua_state, get_empty_object_marker());
+    lua_setfield(m_lua_state, -2, "empty_object");
+
+    lua_pushlightuserdata(m_lua_state, get_empty_array_marker());
+    lua_setfield(m_lua_state, -2, "empty_array");
+
     return 1;
 }
