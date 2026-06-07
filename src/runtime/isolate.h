@@ -4,11 +4,7 @@
 #include <optional>
 #include <string>
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include <lua.hpp>
 
 // base Request and Response
 struct LuaRequest {
