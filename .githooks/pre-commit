@@ -1,5 +1,5 @@
 #!/bin/sh
-# Formats staged C/C++/Lua files before committing.
+# formats staged C/C++/Lua files before committing.
 
 set -e
 
