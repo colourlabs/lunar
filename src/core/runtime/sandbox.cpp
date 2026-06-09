@@ -46,10 +46,7 @@ void Sandbox::open_safe_libs(lua_State *m_lua_state) {
 
 void Sandbox::remove_unsafe_globals(lua_State *m_lua_state) {
     static constexpr std::array unsafe = {
-        "dofile", "loadfile",
-        "load",
-        "rawget",
-        "rawset", "rawequal", "rawlen", "collectgarbage",
+        "dofile", "loadfile", "load", "rawget", "rawset", "rawequal", "rawlen", "collectgarbage",
     };
 
     for (const auto &name : unsafe) {

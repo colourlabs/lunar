@@ -1,13 +1,11 @@
 ---@meta lunar.fetch
 
-local fetch = {}
-
 ---@class FetchResponse
 ---@field status integer
 ---@field ok boolean
 ---@field body string
 ---@field headers table<string, string>
-local FetchResponse = {}
+local FetchResponse
 
 ---@return any
 function FetchResponse:json() end
@@ -22,6 +20,6 @@ function FetchResponse:json() end
 ---@param url string
 ---@param options? FetchOptions
 ---@return FetchResponse
-function fetch(url, options) end
+local function fetch(url, options) end
 
 return fetch

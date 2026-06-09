@@ -134,9 +134,8 @@ bool Isolate::load_worker(const std::string &path) {
     return true;
 }
 
-void Isolate::dispatch_async(uv_loop_t *loop,
-                             std::function<int(lua_State*)> push_args,
-                             std::function<void(lua_State*)> on_result) {
+void Isolate::dispatch_async(uv_loop_t *loop, std::function<int(lua_State *)> push_args,
+                             std::function<void(lua_State *)> on_result) {
     lunar_reset_instruction_count(m_lua_state);
 
     lua_pushlightuserdata(m_lua_state, loop);
@@ -193,9 +192,8 @@ void Isolate::step_coroutine(lua_State *thread, int nargs) {
     if (status != LUA_OK) {
         m_last_error = lua_tostring(thread, -1);
         Logger::error("[isolate] coroutine error: {}", m_last_error);
-        Logger::error("[isolate] used={} peak={} limit={} baseline={}",
-            m_alloc_state.m_used, m_alloc_state.m_peak,
-            m_alloc_state.m_limit, m_alloc_state.m_baseline);
+        Logger::error("[isolate] used={} peak={} limit={} baseline={}", m_alloc_state.m_used,
+                      m_alloc_state.m_peak, m_alloc_state.m_limit, m_alloc_state.m_baseline);
         lua_pop(thread, nres);
         pending.m_on_result(thread);
         return;

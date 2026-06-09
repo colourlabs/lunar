@@ -129,8 +129,8 @@ int Connection::on_message_complete(llhttp_t *parser) {
         req,
         [self](const LuaResponse &res) {
             self->write_response(res);
-            uv_read_start(static_cast<uv_stream_t *>(static_cast<void *>(&self->m_tcp)),
-                          on_alloc, on_read);
+            uv_read_start(static_cast<uv_stream_t *>(static_cast<void *>(&self->m_tcp)), on_alloc,
+                          on_read);
         },
         self->m_loop);
 

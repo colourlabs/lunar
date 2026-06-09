@@ -11,7 +11,7 @@
 namespace LunarCore {
 
 struct PendingRequest {
-    std::function<void(lua_State*)> m_on_result;
+    std::function<void(lua_State *)> m_on_result;
     int m_thread_ref = LUA_NOREF;
 };
 
@@ -26,9 +26,8 @@ class Isolate {
     Isolate(Isolate &&other) noexcept;
     Isolate &operator=(Isolate &&other) noexcept;
 
-    void dispatch_async(uv_loop_t *loop,
-                        std::function<int(lua_State*)> push_args,
-                        std::function<void(lua_State*)> on_result);
+    void dispatch_async(uv_loop_t *loop, std::function<int(lua_State *)> push_args,
+                        std::function<void(lua_State *)> on_result);
 
     void resume_coroutine(lua_State *thread, int nargs);
 

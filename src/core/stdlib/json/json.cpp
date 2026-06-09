@@ -7,12 +7,12 @@ namespace LunarCore {
 
 static constexpr int max_depth = 64;
 
-static void* get_empty_object_marker() {
+static void *get_empty_object_marker() {
     static char marker = 0;
     return &marker;
 }
 
-static void* get_empty_array_marker() {
+static void *get_empty_array_marker() {
     static char marker = 0;
     return &marker;
 }
@@ -126,19 +126,19 @@ static void encode_lua_number(lua_State *m_lua_state, yyjson_mut_doc *doc, yyjso
 
 static bool lua_table_is_array(lua_State *m_lua_state, int idx, lua_Integer &out_max) {
     out_max = 0;
-    
+
     lua_pushnil(m_lua_state);
     bool is_empty = (lua_next(m_lua_state, idx) == 0);
-    
+
     if (is_empty) {
         lua_getfield(m_lua_state, LUA_REGISTRYINDEX, "LUNAR_JSON_ARRAY_MT");
-        
+
         if (lua_getmetatable(m_lua_state, idx) != 0) {
             bool has_array_mt = (lua_rawequal(m_lua_state, -1, -2) != 0);
             lua_pop(m_lua_state, 2);
             return has_array_mt;
         }
-        
+
         lua_pop(m_lua_state, 1);
         return false;
     }
@@ -206,7 +206,7 @@ static void encode_lua_value(lua_State *m_lua_state, yyjson_mut_doc *doc, yyjson
 
     case LUA_TTABLE: {
         luaL_checkstack(m_lua_state, 4, "json.encode: too deeply nested");
-        
+
         lua_Integer max_n = 0;
         if (lua_table_is_array(m_lua_state, idx, max_n)) {
             yyjson_mut_val *arr = yyjson_mut_arr(doc);
@@ -239,8 +239,8 @@ static void encode_lua_value(lua_State *m_lua_state, yyjson_mut_doc *doc, yyjson
     }
 
     case LUA_TLIGHTUSERDATA: {
-        void* ptr = lua_touserdata(m_lua_state, idx);
-        
+        void *ptr = lua_touserdata(m_lua_state, idx);
+
         if (ptr == get_empty_object_marker()) {
             append(yyjson_mut_obj(doc));
         } else if (ptr == get_empty_array_marker()) {
@@ -302,10 +302,10 @@ int luaopen_json(lua_State *m_lua_state) {
     lua_createtable(m_lua_state, 0, 1);
     lua_pushstring(m_lua_state, "array");
     lua_setfield(m_lua_state, -2, "__jsontype");
-    
+
     lua_pushvalue(m_lua_state, -1);
     lua_setfield(m_lua_state, -3, "array_mt");
-    
+
     lua_pushvalue(m_lua_state, -1);
     lua_setfield(m_lua_state, LUA_REGISTRYINDEX, "LUNAR_JSON_ARRAY_MT");
 

@@ -12,13 +12,12 @@
 namespace Lunar {
 
 class IsolatePool {
-public:
+  public:
     IsolatePool(const std::string &worker, const std::string &std_path, size_t count);
 
-    void submit(const LuaRequest &req, std::function<void(LuaResponse)> callback,
-                uv_loop_t *loop);
+    void submit(const LuaRequest &req, std::function<void(LuaResponse)> callback, uv_loop_t *loop);
 
-private:
+  private:
     std::vector<std::unique_ptr<LunarCore::Isolate>> m_isolates;
     std::atomic<size_t> m_next = 0;
 };

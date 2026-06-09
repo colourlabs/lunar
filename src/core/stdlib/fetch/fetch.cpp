@@ -21,9 +21,9 @@ struct FetchResponse {
 };
 
 struct FetchContinuation {
-    lua_State  *m_thread;
-    uv_loop_t  *m_loop;
-    Isolate    *m_isolate;
+    lua_State *m_thread;
+    uv_loop_t *m_loop;
+    Isolate *m_isolate;
     curl_slist *m_headers;
     std::string m_body_buf;
 };
@@ -243,10 +243,10 @@ static int lua_fetch(lua_State *m_lua_state) {
     }
 
     auto *cont = new FetchContinuation{
-        .m_thread   = m_lua_state,
-        .m_loop     = loop,
-        .m_isolate  = isolate,
-        .m_headers  = headers,
+        .m_thread = m_lua_state,
+        .m_loop = loop,
+        .m_isolate = isolate,
+        .m_headers = headers,
         .m_body_buf = opts.m_body,
     };
 
@@ -258,8 +258,8 @@ static int lua_fetch(lua_State *m_lua_state) {
     CurlUvContext::get(loop).add(curl, [cont](CURLcode code, CurlTransfer xfer) {
         curl_slist_free_all(cont->m_headers);
 
-        lua_State *thread  = cont->m_thread;
-        Isolate   *isolate = cont->m_isolate;
+        lua_State *thread = cont->m_thread;
+        Isolate *isolate = cont->m_isolate;
         delete cont;
 
         if (code != CURLE_OK) {
@@ -270,9 +270,9 @@ static int lua_fetch(lua_State *m_lua_state) {
         }
 
         FetchResponse fres{
-            .m_body        = std::move(xfer.m_body),
+            .m_body = std::move(xfer.m_body),
             .m_headers_raw = std::move(xfer.m_headers_raw),
-            .m_status      = xfer.m_status,
+            .m_status = xfer.m_status,
         };
         push_response(thread, fres);
         isolate->resume_coroutine(thread, 1);

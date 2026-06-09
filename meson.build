@@ -172,9 +172,44 @@ run_target('lint',
     ]
 )
 
+# Lua source files for tooling
+all_lua_src = [
+    'src/lunar/lua/router.lua',
+    'lunar-types/json.lua',
+    'lunar-types/fetch.lua',
+    'lunar-types/router.lua',
+    'lunar-types/handle.lua',
+    'examples/hello/worker.lua',
+    'examples/router/worker.lua',
+    'examples/router/fetch.lua',
+    'examples/escape/worker.lua',
+]
+
 run_target('format',
     command: [
-        'clang-format',
-        '-i',
+        'sh', '-c',
+        'cd "$MESON_SOURCE_ROOT" && clang-format -i "$@"', 'sh',
     ] + all_src
+)
+
+run_target('format-lua',
+    command: [
+        'sh', '-c',
+        '''if ! command -v stylua >/dev/null 2>&1; then
+               echo "stylua not found -- install with: cargo install stylua"
+               exit 1
+           fi
+           cd "$MESON_SOURCE_ROOT" && stylua "$@"''', 'sh',
+    ] + all_lua_src
+)
+
+run_target('lint-lua',
+    command: [
+        'sh', '-c',
+        '''if ! command -v selene >/dev/null 2>&1; then
+               echo "selene not found -- install with: cargo install selene"
+               exit 1
+           fi
+           cd "$MESON_SOURCE_ROOT" && selene "$@"''', 'sh',
+    ] + all_lua_src
 )

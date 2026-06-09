@@ -1,18 +1,18 @@
 #pragma once
-#include <uv.h>
 #include <string>
+#include <uv.h>
 
 namespace Lunar {
 
 class IsolatePool;
 
 class Server {
-public:
+  public:
     Server(uv_loop_t *loop, IsolatePool *pool);
     bool listen(const std::string &host, int port);
     void run();
 
-private:
+  private:
     uv_loop_t *m_loop;
     uv_tcp_t m_tcp;
     IsolatePool *m_pool;

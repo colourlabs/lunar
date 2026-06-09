@@ -99,11 +99,13 @@ int CurlUvContext::handle_socket(CURL * /*easy*/, curl_socket_t sock, int action
         if (poll != nullptr) {
             uv_poll_stop(poll);
             uv_close( // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-                reinterpret_cast<uv_handle_t *>(  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-                    poll),               
+                reinterpret_cast<
+                    uv_handle_t *>( // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                    poll),
                 [](uv_handle_t *handle) {
-                    delete reinterpret_cast<uv_poll_t *>(  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-                        handle); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                    delete reinterpret_cast<
+                        uv_poll_t *>( // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                        handle);      // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
                 });
             curl_multi_assign(self->m_multi, sock, nullptr);
         }
@@ -142,8 +144,9 @@ int CurlUvContext::handle_socket(CURL * /*easy*/, curl_socket_t sock, int action
         uv_os_fd_t file_descriptor = {};
         // NOLINT: reinterpret_cast required by libuv's C API
         uv_fileno( // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-            reinterpret_cast<uv_handle_t *>(handle), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-            &file_descriptor); 
+            reinterpret_cast<uv_handle_t *>(
+                handle), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+            &file_descriptor);
 
         int running = 0;
         curl_multi_socket_action(ctx->m_multi, static_cast<curl_socket_t>(file_descriptor), flags,

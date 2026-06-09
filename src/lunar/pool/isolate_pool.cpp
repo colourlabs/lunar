@@ -31,8 +31,7 @@ void IsolatePool::submit(const LuaRequest &req, std::function<void(LuaResponse)>
         [callback = std::move(callback)](lua_State *thread) {
             LuaResponse res = read_response(thread);
             callback(std::move(res));
-        }
-    );
+        });
 }
 
 } // namespace Lunar
