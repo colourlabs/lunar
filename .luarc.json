@@ -1,11 +1,21 @@
 {
   "runtime": {
-    "version": "Lua 5.4"
+    "version": "Lua 5.4",
+    "path": [
+      "src/lunar/lua/?.lua",
+      "examples/?.lua"
+    ],
+    "requireLike": ["require"],
+    "fileExtensions": ["lua"]
   },
   "diagnostics": {
     "globals": ["handle"]
   },
   "workspace": {
-    "library": ["lunar/"]
+    "library": [
+      "lunar-types",
+      "src/lunar/lua"
+    ],
+    "checkThirdParty": false
   }
 }

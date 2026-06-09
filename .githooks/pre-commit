@@ -1,0 +1,19 @@
+#!/bin/sh
+# formats staged C/C++ files with clang-format.
+# re-stages them so the formatted versions are committed.
+
+set -e
+
+c_files=$(git diff --cached --name-only --diff-filter=ACM \
+    '*.cpp' '*.hpp' '*.c' '*.h' |
+    tr '\n' ' ')
+
+if [ -z "$c_files" ]; then
+    exit 0
+fi
+
+# shellcheck disable=SC2086
+clang-format -i $c_files
+
+# shellcheck disable=SC2086
+git add $c_files

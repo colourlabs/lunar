@@ -12,7 +12,8 @@ subprojects/libuv-v1.51.0/
 subprojects/spdlog-1.17.0/
 subprojects/llhttp-release-v9.4.1/
 subprojects/packagecache/
-subprojects/yyjson
+subprojects/yyjson/
+subprojects/doctest-2.4.11/
 
 # editor
 .vscode/

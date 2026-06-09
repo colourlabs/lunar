@@ -54,56 +54,112 @@ libcurl = dependency('libcurl',
     required: true
 )
 
-# sources
-src = files(
-    'src/main.cpp',
-    'src/runtime/isolate.cpp',
-    'src/runtime/sandbox.cpp',
-    'src/server/server.cpp',
-    'src/server/connection.cpp',
-    'src/pool/isolate_pool.cpp',
-    'src/utils/logger.cpp',
-    'src/utils/http.cpp',
-    'src/utils/bootstrap.cpp',
-    'src/stdlib/json/json.cpp',
-    'src/stdlib/fetch/fetch.cpp',
-    'src/stdlib/fetch/curl_uv_context.cpp'
+# embedded Lua (convert .lua files to C++ header at build time)
+embed_lua_script = files('scripts/embed_lua.py')
+
+embedded_lua_hpp = custom_target('embedded-lua',
+    input: files('src/lunar/lua/router.lua'),
+    output: 'embedded_lua.hpp',
+    command: [embed_lua_script, meson.current_source_dir() / 'src/lunar/lua', '@OUTPUT@'],
+    build_by_default: true,
+)
+
+# core library sources
+core_src = files(
+    'src/core/runtime/isolate.cpp',
+    'src/core/runtime/sandbox.cpp',
+    'src/core/utils/logger.cpp',
+    'src/core/utils/bootstrap.cpp',
+    'src/core/stdlib/json/json.cpp',
+    'src/core/stdlib/fetch/fetch.cpp',
+    'src/core/stdlib/fetch/curl_uv_context.cpp',
+)
+
+# core library
+lunar_core = static_library(
+    'lunar_core',
+    core_src + [embedded_lua_hpp],
+    dependencies: [lua_lunar, libuv, openssl, llhttp, spdlog, yyjson, libcurl],
+    include_directories: include_directories('src/core'),
+    install: true,
+)
+
+lunar_core_dep = declare_dependency(
+    link_with: lunar_core,
+    include_directories: include_directories('src/core'),
+    dependencies: [lua_lunar, libuv, openssl, llhttp, spdlog, yyjson, libcurl],
+)
+
+# lunar types library (HTTP wire types, shared between lunar and tests)
+lunar_types_lib = static_library(
+    'lunar_types',
+    files('src/lunar/types.cpp'),
+    include_directories: include_directories('src/lunar'),
+)
+
+lunar_types_dep = declare_dependency(
+    link_with: lunar_types_lib,
+    include_directories: include_directories('src/lunar'),
+)
+
+# lunar executable sources
+lunar_src = files(
+    'src/lunar/main.cpp',
+    'src/lunar/server/server.cpp',
+    'src/lunar/server/connection.cpp',
+    'src/lunar/pool/isolate_pool.cpp',
+    'src/lunar/utils/http.cpp',
 )
 
 # main executable
 executable(
     'lunar',
-    src,
-    dependencies: [lua_lunar, libuv, openssl, llhttp, spdlog, yyjson, libcurl],
-    include_directories: include_directories('src'),
+    lunar_src,
+    dependencies: [lunar_core_dep, lunar_types_dep],
+    include_directories: include_directories('src/lunar'),
     install: true,
+)
+
+# Lua stdlib files
+install_subdir('src/lunar/lua',
+    install_dir: 'share/lunar',
+    strip_directory: true,
 )
 
 # all source files for tooling
 all_src = [
-    'src/main.cpp',
-    'src/runtime/isolate.cpp',
-    'src/runtime/isolate.hpp',
-    'src/runtime/sandbox.cpp',
-    'src/runtime/sandbox.hpp',
-    'src/server/server.cpp',
-    'src/server/server.hpp',
-    'src/server/connection.cpp',
-    'src/server/connection.hpp',
-    'src/pool/isolate_pool.cpp',
-    'src/pool/isolate_pool.hpp',
-    'src/utils/logger.hpp',
-    'src/utils/http.cpp',
-    'src/utils/http.hpp',
-    'src/utils/logger.cpp',
-    'src/stdlib/json/json.cpp',
-    'src/stdlib/json/json.hpp',
-    'src/stdlib/fetch/curl_uv_context.cpp',
-    'src/stdlib/fetch/curl_uv_context.hpp',
-    'src/stdlib/fetch/fetch_limits.cpp',
-    'src/stdlib/fetch/fetch.cpp',
-    'src/stdlib/fetch/fetch.hpp'
+    'src/core/runtime/isolate.cpp',
+    'src/core/runtime/isolate.hpp',
+    'src/core/runtime/sandbox.cpp',
+    'src/core/runtime/sandbox.hpp',
+    'src/core/utils/logger.hpp',
+    'src/core/utils/logger.cpp',
+    'src/core/utils/bootstrap.cpp',
+    'src/core/utils/bootstrap.hpp',
+    'src/core/stdlib/json/json.cpp',
+    'src/core/stdlib/json/json.hpp',
+    'src/core/stdlib/fetch/curl_uv_context.cpp',
+    'src/core/stdlib/fetch/curl_uv_context.hpp',
+    'src/core/stdlib/fetch/fetch_limits.hpp',
+    'src/core/stdlib/fetch/fetch.cpp',
+    'src/core/stdlib/fetch/fetch.hpp',
+    'src/lunar/main.cpp',
+    'src/lunar/types.cpp',
+    'src/lunar/types.hpp',
+    'src/lunar/server/server.cpp',
+    'src/lunar/server/server.hpp',
+    'src/lunar/server/connection.cpp',
+    'src/lunar/server/connection.hpp',
+    'src/lunar/pool/isolate_pool.cpp',
+    'src/lunar/pool/isolate_pool.hpp',
+    'src/lunar/utils/http.cpp',
+    'src/lunar/utils/http.hpp',
 ]
+
+# tests
+if not meson.is_subproject()
+    subdir('tests')
+endif
 
 run_target('lint',
     command: [
